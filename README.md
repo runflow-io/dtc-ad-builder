@@ -1,4 +1,4 @@
-# DropVentures — Lovable template
+# DropVentures · DTC Ad Builder
 
 Drop one supplier photo, get a **7-asset store-ready brand pack** in ~90 seconds. Cutout, white-background studio, 3 lifestyle scenes (AI-picked per product), 9:16 hero, 1:1 ad creative. Optionally match the visual style of a reference ad you like.
 
@@ -6,7 +6,15 @@ Drop one supplier photo, get a **7-asset store-ready brand pack** in ~90 seconds
 
 100% browser. No backend. No database. Fork it, drop in your two API keys, ship. Powered by [Runflow](https://www.runflow.io) (image pipeline) + [OpenAI](https://platform.openai.com) (gpt-4o vision).
 
+[![Open in Replit](https://replit.com/badge/github/runflow-io/dtc-ad-builder)](https://replit.com/github/runflow-io/dtc-ad-builder)
+
 ## Quick start
+
+### Option A — Open in Replit (no install)
+
+Click the badge above. Replit clones the repo, runs `npm install`, and serves the app at a public preview URL. Open Settings, paste your Runflow + OpenAI keys, drop an image. ~2 minutes to first brand pack.
+
+### Option B — Run locally
 
 ```bash
 git clone https://github.com/runflow-io/dtc-ad-builder.git
