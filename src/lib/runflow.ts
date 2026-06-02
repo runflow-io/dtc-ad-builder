@@ -1,0 +1,140 @@
+// Runflow API client (browser).
+//
+// Auth: Bearer <RUNFLOW_API_KEY>. The user's key, stored in localStorage,
+// is passed at call time. Runflow handles per-call billing on their side —
+// the template never sees the user's money.
+
+const RUNFLOW_BASE = "https://api.runflow.io/v1";
+
+export class RunflowError extends Error {
+  constructor(message: string, public status?: number) {
+    super(message);
+    this.name = "RunflowError";
+  }
+}
+
+async function runflowFetch(
+  path: string,
+  apiKey: string,
+  init: RequestInit = {}
+): Promise<any> {
+  const res = await fetch(`${RUNFLOW_BASE}${path}`, {
+    ...init,
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+      ...(init.headers || {}),
+    },
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new RunflowError(
+      `Runflow ${init.method || "GET"} ${path} -> ${res.status}: ${body.slice(0, 400)}`,
+      res.status
+    );
+  }
+  return res.json();
+}
+
+// ---------- asset upload (browser → Runflow assets bucket) ----------
+
+export async function uploadAsset(file: File | Blob, filename: string, apiKey: string): Promise<string> {
+  const mime = (file as File).type || "image/jpeg";
+  const size = (file as File).size;
+
+  const created = await runflowFetch("/asset-uploads", apiKey, {
+    method: "POST",
+    body: JSON.stringify({ filename, mime_type: mime, size_bytes: size }),
+  });
+  const assetId = created.asset_id;
+  const uploadUrl = created.upload_url;
+
+  // presigned PUT (no auth header — auth is in the signed URL itself)
+  const put = await fetch(uploadUrl, {
+    method: "PUT",
+    headers: { "Content-Type": mime },
+    body: file,
+  });
+  if (!put.ok) {
+    throw new RunflowError(`presigned PUT -> ${put.status}`, put.status);
+  }
+
+  const confirmed = await runflowFetch(
+    `/asset-uploads/${assetId}/confirmations`,
+    apiKey,
+    { method: "POST", body: JSON.stringify({ folder_id: null }) }
+  );
+  return confirmed.url as string;
+}
+
+// ---------- Solution run + poll ----------
+
+export type RunStatus = "queued" | "running" | "succeeded" | "failed" | "errored" | "canceled";
+
+export async function runSolution(
+  slug: string,
+  input: Record<string, unknown>,
+  apiKey: string,
+  opts: { timeoutMs?: number; pollIntervalMs?: number; clientRef?: string } = {}
+): Promise<{ output: any }> {
+  const { timeoutMs = 360_000, pollIntervalMs = 3000, clientRef } = opts;
+
+  const start = await runflowFetch(`/models/${slug}/runs`, apiKey, {
+    method: "POST",
+    body: JSON.stringify({
+      input,
+      client_ref: clientRef || `dropventures-${Date.now()}`,
+    }),
+  });
+  const runId: string = start.id || start.run_id;
+  if (!runId) {
+    throw new RunflowError(`No run id returned for ${slug}`);
+  }
+
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const run = await runflowFetch(`/runs/${runId}`, apiKey);
+    const status: string = run.status_code || run.status;
+    if (status === "succeeded") return run;
+    if (status === "failed" || status === "errored" || status === "canceled") {
+      throw new RunflowError(`${slug} ${status}: ${JSON.stringify(run.error || run).slice(0, 400)}`);
+    }
+    await new Promise((r) => setTimeout(r, pollIntervalMs));
+  }
+  throw new RunflowError(`${slug} run ${runId} timed out`);
+}
+
+// ---------- output URL extraction ----------
+
+export function firstUrl(run: { output?: any }): string | null {
+  const out = run.output;
+  if (!out) return null;
+  if (typeof out === "string") return out;
+
+  for (const k of ["image_url", "url", "output_url", "image"]) {
+    const v = out[k];
+    if (typeof v === "string" && v.startsWith("http")) return v;
+  }
+  for (const k of ["image_urls", "outputs", "images"]) {
+    const v = out[k];
+    if (Array.isArray(v)) {
+      for (const item of v) {
+        if (typeof item === "string" && item.startsWith("http")) return item;
+        if (item && typeof item === "object") {
+          for (const k2 of ["url", "image_url"]) {
+            if (typeof item[k2] === "string") return item[k2];
+          }
+        }
+      }
+    }
+  }
+  return null;
+}
+
+// ---------- download a remote image as a Blob (for ZIPing locally) ----------
+
+export async function downloadBlob(url: string): Promise<Blob> {
+  const res = await fetch(url);
+  if (!res.ok) throw new RunflowError(`download ${url} -> ${res.status}`, res.status);
+  return res.blob();
+}

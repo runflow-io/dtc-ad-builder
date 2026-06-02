@@ -1,0 +1,41 @@
+import { Settings } from "lucide-react";
+
+type Props = {
+  keysOk: boolean;
+  onOpenSettings: () => void;
+};
+
+export function Header({ keysOk, onOpenSettings }: Props) {
+  return (
+    <header className="flex items-center justify-between mb-8">
+      <div className="flex items-center gap-3">
+        <div
+          className="w-8 h-3.5 rounded-full"
+          style={{ background: "linear-gradient(90deg, #1a1a1a 0%, #d97706 100%)" }}
+        />
+        <div className="font-bold text-lg tracking-tight">
+          Drop<span className="text-amber">Ventures</span>
+        </div>
+      </div>
+      <div className="flex items-center gap-2">
+        <span
+          className={
+            "font-mono uppercase tracking-wider text-[10px] px-2.5 py-1 rounded-full border " +
+            (keysOk
+              ? "text-green border-green/30 bg-green-soft"
+              : "text-red border-red/30 bg-red-soft")
+          }
+        >
+          {keysOk ? "KEYS ✓" : "KEYS MISSING"}
+        </span>
+        <button
+          onClick={onOpenSettings}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium text-ink-2 hover:bg-panel-2 transition-colors"
+        >
+          <Settings className="w-3.5 h-3.5" />
+          Settings
+        </button>
+      </div>
+    </header>
+  );
+}
