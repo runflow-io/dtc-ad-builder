@@ -48,16 +48,21 @@ export function Dropzone({ label, required, hint, subHint, file, onChange }: Pro
       </div>
 
       <div
-        onClick={() => inputRef.current?.click()}
+        // NB: do NOT add onClick={() => inputRef.current?.click()} here — the
+        // <input> below covers the entire area (absolute inset-0) and already
+        // opens the file picker on click. Adding a parent onClick causes the
+        // click to bubble + fire a second picker.
         onDragOver={(e) => { e.preventDefault(); setDrag(true); }}
         onDragLeave={() => setDrag(false)}
         onDrop={(e) => {
           e.preventDefault();
           setDrag(false);
           accept(e.dataTransfer.files[0]);
+          // reset input so re-uploading the same filename still fires onChange
+          if (inputRef.current) inputRef.current.value = "";
         }}
         className={
-          "relative rounded-xl cursor-pointer transition-colors overflow-hidden flex items-center justify-center min-h-[300px] " +
+          "relative rounded-xl transition-colors overflow-hidden flex items-center justify-center min-h-[300px] " +
           (file
             ? "border border-line bg-panel"
             : drag
@@ -69,11 +74,15 @@ export function Dropzone({ label, required, hint, subHint, file, onChange }: Pro
           ref={inputRef}
           type="file"
           accept="image/jpeg,image/png,image/webp"
-          className="absolute inset-0 opacity-0 cursor-pointer"
-          onChange={(e) => accept(e.target.files?.[0])}
+          className="absolute inset-0 opacity-0 cursor-pointer z-10"
+          onChange={(e) => {
+            accept(e.target.files?.[0]);
+            // reset so re-uploading the same file still triggers onChange next time
+            e.target.value = "";
+          }}
         />
         {preview ? (
-          <img src={preview} className="max-w-full max-h-[460px] block" />
+          <img src={preview} className="max-w-full max-h-[460px] block pointer-events-none" />
         ) : (
           <div className="text-center px-5 pointer-events-none">
             <div className="font-semibold text-[15px] mb-2">{hint}</div>
