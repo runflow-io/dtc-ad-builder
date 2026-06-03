@@ -34,6 +34,8 @@ export type Analysis = {
   product: string;
   category: string;
   cleanup_prompt: string;
+  /** Dominant palette + lighting of the source photo — used to keep AI-picked scenes tonally consistent. */
+  source_palette?: string;
   reference_style?: {
     surface?: string;
     lighting?: string;
@@ -65,14 +67,17 @@ const VISION_USER_BASE =
   "  - product (3-6 word description)\n" +
   "  - category (kitchen/beauty/fitness/fashion/home/tech/pets/kids/outdoor/accessories/other)\n" +
   "  - cleanup_prompt (≤7-word imperative for object-removal, or 'none')\n" +
+  "  - source_palette (3-5 words describing the source photo's dominant palette + lighting, e.g. 'warm orange backdrop, soft daylight')\n" +
   "  - lifestyle_scenes (array of 3 short scene phrases)\n\n" +
   "STRICT SCENE RULES:\n" +
   "1. Product is always hero, in NATURAL use/display position.\n" +
   "2. Must REST on a stable horizontal surface that physically supports it.\n" +
   "3. NEVER inside a bag/container/drawer/box. Never mid-air. Never held by a hand.\n" +
   "4. Avoid people unless category truly requires (apparel/beauty).\n" +
-  "5. Each scene is ONE short photographic phrase.\n\n" +
-  'Return JSON: { "product": "...", "category": "...", "cleanup_prompt": "...", "lifestyle_scenes": ["...","...","..."] }';
+  "5. Each scene is ONE short photographic phrase.\n" +
+  "6. PALETTE CONTINUITY (critical): every scene must stay tonally close to source_palette — same hue family, similar warmth/coolness, comparable lighting mood. Vary the SURFACE and PROPS, not the color cast. NEVER introduce a vivid contrasting background color (e.g. orange source → no yellow/blue/green/pink scenes).\n" +
+  "7. Diversity comes from setting (kitchen counter / wooden desk / linen tablecloth / marble shelf), props, and time of day — not from inventing a new color scheme.\n\n" +
+  'Return JSON: { "product": "...", "category": "...", "cleanup_prompt": "...", "source_palette": "...", "lifestyle_scenes": ["...","...","..."] }';
 
 const VISION_USER_WITH_REF =
   "You are analyzing TWO images:\n" +
@@ -166,6 +171,7 @@ async function genLifestyle(
   cutoutUrl: string,
   scene: string,
   referenceUrl: string | null,
+  sourcePalette: string | null,
   apiKey: string
 ): Promise<string> {
   const imageUrls = [cutoutUrl];
@@ -177,6 +183,11 @@ async function genLifestyle(
       "- IMAGE 1 is the product cutout — preserve its EXACT identity, color, material, edges.\n" +
       "- IMAGE 2 is the style reference — match its lighting, palette, surface texture, mood, treatment.\n" +
       "- DO NOT copy IMAGE 2's product, props, or subject one-for-one. Borrow only the visual treatment.";
+  } else if (sourcePalette) {
+    styleClause =
+      `\n\nPALETTE CONTINUITY — stay tonally consistent with the source photo (${sourcePalette}). ` +
+      "Use the same hue family, warmth, and lighting mood. Vary the surface and props, NOT the color cast. " +
+      "Do not introduce a vivid contrasting background color.";
   }
   const prompt =
     `Place this exact product in the following scene: ${scene}.` + PLACEMENT_RULES + styleClause;
@@ -346,7 +357,7 @@ export async function runPipeline(input: PipelineInput, onProgress: ProgressFn):
       const tags = ["a", "b", "c"];
       scenes.forEach((scene, i) => {
         tasks.push(
-          genLifestyle(cutoutUrl!, scene, referenceUrl, keys.runflow).then((url) => ({
+          genLifestyle(cutoutUrl!, scene, referenceUrl, analysis.source_palette ?? null, keys.runflow).then((url) => ({
             key: `life_${tags[i]}`,
             url,
             // Keep label short so the UI doesn't get noisy. Full prompt
