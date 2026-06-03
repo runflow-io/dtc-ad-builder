@@ -1,14 +1,60 @@
 import { Check, X, Loader2 } from "lucide-react";
 import type { Analysis, StepKey, StepStatus } from "../lib/pipeline";
+import type { LightboxItem } from "./Lightbox";
 
 type Steps = Record<StepKey, StepStatus>;
+
+/** Onclick handler receives a canonical, deduped, ordered list of all currently-visible
+ *  zoomable images plus the start index. The caller (App.tsx) opens the lightbox. */
+export type ZoomFn = (items: LightboxItem[], startIndex: number) => void;
 
 type Props = {
   steps: Steps;
   analysis: Analysis | null;
   assetUrls: Record<string, string>;
-  onZoom: (src: string, label: string, filename: string) => void;
+  onZoom: ZoomFn;
 };
+
+// Canonical pipeline ordering for the lightbox rotation. Any keys not in this list
+// are appended in insertion order at the end (covers dynamic ratio keys).
+const CANONICAL_KEYS: Array<{ key: string; label: string; filename: string }> = [
+  { key: "__source", label: "Supplier image", filename: "source" },
+  { key: "cleaned", label: "Cleaned source", filename: "00_cleaned.jpg" },
+  { key: "cutout", label: "RGBA cutout", filename: "01_cutout.png" },
+  { key: "white", label: "White studio (Amazon main)", filename: "02_white_studio.jpg" },
+  { key: "life_a", label: "Lifestyle A", filename: "03_lifestyle_a.jpg" },
+  { key: "life_b", label: "Lifestyle B", filename: "04_lifestyle_b.jpg" },
+  { key: "life_c", label: "Lifestyle C", filename: "05_lifestyle_c.jpg" },
+];
+
+function buildPipelineItems(assetUrls: Record<string, string>): LightboxItem[] {
+  const items: LightboxItem[] = [];
+  const seen = new Set<string>();
+  const consumed = new Set<string>();
+  for (const c of CANONICAL_KEYS) {
+    const src = assetUrls[c.key];
+    if (!src || seen.has(src)) continue;
+    seen.add(src);
+    consumed.add(c.key);
+    items.push({ src, label: c.label, filename: c.filename });
+  }
+  // append any dynamic keys (e.g. life_a_9x16) in insertion order
+  for (const k of Object.keys(assetUrls)) {
+    if (consumed.has(k)) continue;
+    const src = assetUrls[k];
+    if (!src || seen.has(src)) continue;
+    seen.add(src);
+    items.push({ src, label: k.replace(/_/g, " · "), filename: `${k}.jpg` });
+  }
+  return items;
+}
+
+function pipelineZoom(assetUrls: Record<string, string>, clickedSrc: string, onZoom: ZoomFn) {
+  const items = buildPipelineItems(assetUrls);
+  if (!items.length) return;
+  const idx = Math.max(0, items.findIndex((i) => i.src === clickedSrc));
+  onZoom(items, idx);
+}
 
 const STEP_META: Record<StepKey, { num: number; title: string; foot: string }> = {
   upload: { num: 1, title: "Upload", foot: "Supplier image uploaded to Runflow assets" },
@@ -107,12 +153,13 @@ function StepBody({
   status: StepStatus;
   analysis: Analysis | null;
   assetUrls: Record<string, string>;
-  onZoom: (src: string, label: string, filename: string) => void;
+  onZoom: ZoomFn;
 }) {
+  const zoom = (src: string) => pipelineZoom(assetUrls, src, onZoom);
   if (stepKey === "upload") {
     const src = assetUrls["__source"];
     if (!src) return <Placeholder text={status === "running" ? "uploading…" : "supplier image"} />;
-    return <ZoomImg src={src} label="Supplier image" filename="source" onZoom={onZoom} />;
+    return <ZoomImg src={src} onZoom={zoom} />;
   }
   if (stepKey === "vision") {
     if (!analysis) return <Placeholder text={status === "running" ? "analyzing…" : "product analysis"} />;
@@ -148,26 +195,21 @@ function StepBody({
     if (!src) return <Placeholder text={status === "running" ? "extracting…" : "RGBA cutout"} />;
     return (
       <div className="absolute inset-0 checker flex items-center justify-center">
-        <ZoomImg src={src} label="RGBA cutout" filename="01_cutout.png" onZoom={onZoom} />
+        <ZoomImg src={src} onZoom={zoom} />
       </div>
     );
   }
   if (stepKey === "scenes") {
-    const urls: Array<[string, string, string]> = [
-      [assetUrls.white, "White studio (Amazon main)", "02_white_studio.jpg"],
-      [assetUrls.life_a, "Lifestyle A", "03_lifestyle_a.jpg"],
-      [assetUrls.life_b, "Lifestyle B", "04_lifestyle_b.jpg"],
-      [assetUrls.life_c, "Lifestyle C", "05_lifestyle_c.jpg"],
-    ];
-    const anyLoaded = urls.some(([u]) => !!u);
-    if (!anyLoaded) return <Placeholder text={status === "running" ? "generating…" : "white + 3 lifestyle (parallel)"} />;
+    const urls: string[] = [assetUrls.white, assetUrls.life_a, assetUrls.life_b, assetUrls.life_c].filter(Boolean) as string[];
+    if (!urls.length) return <Placeholder text={status === "running" ? "generating…" : "white + 3 lifestyle (parallel)"} />;
+    const slots: (string | undefined)[] = [assetUrls.white, assetUrls.life_a, assetUrls.life_b, assetUrls.life_c];
     return (
       <div className="w-full h-full grid grid-cols-2 grid-rows-2 gap-[2px] p-1">
-        {urls.map(([src, label, fn], i) =>
+        {slots.map((src, i) =>
           src ? (
             <button
               key={i}
-              onClick={(e) => { e.stopPropagation(); onZoom(src, label, fn); }}
+              onClick={(e) => { e.stopPropagation(); zoom(src); }}
               className="overflow-hidden rounded-sm bg-panel cursor-zoom-in"
             >
               <img src={src} className="w-full h-full object-cover" />
@@ -180,30 +222,26 @@ function StepBody({
     );
   }
   if (stepKey === "ratios") {
-    const heroUrl = assetUrls.hero;
-    const adUrl = assetUrls.ad;
-    if (!heroUrl && !adUrl) return <Placeholder text={status === "running" ? "framing…" : "9:16 hero + 1:1 ad"} />;
+    // Dynamic — collect any ratio outputs present (life_a_9x16, white_4x5, etc.)
+    const ratioEntries = Object.entries(assetUrls).filter(([k]) => /_\d+x\d+$/.test(k));
+    if (ratioEntries.length === 0) {
+      return <Placeholder text={status === "running" ? "framing…" : "per-platform ratios"} />;
+    }
+    const shown = ratioEntries.slice(0, 4);
     return (
       <div className="w-full h-full grid grid-cols-2 gap-[2px] p-1">
-        {[
-          [heroUrl, "9:16 hero (TikTok / Reel)", "06_hero_9x16.jpg", "9:16"],
-          [adUrl, "1:1 ad creative", "07_ad_1x1.jpg", "1:1"],
-        ].map(([src, label, fn, tag], i) =>
-          src ? (
-            <button
-              key={i}
-              onClick={(e) => { e.stopPropagation(); onZoom(src as string, label as string, fn as string); }}
-              className="relative overflow-hidden rounded-sm bg-panel cursor-zoom-in"
-            >
-              <img src={src as string} className="w-full h-full object-cover" />
-              <span className="absolute bottom-1 left-1 text-[9px] font-mono font-bold uppercase tracking-wider bg-black/60 text-white px-1.5 py-[3px] rounded">
-                {tag as string}
-              </span>
-            </button>
-          ) : (
-            <div key={i} className="bg-panel rounded-sm" />
-          )
-        )}
+        {shown.map(([k, src], i) => (
+          <button
+            key={i}
+            onClick={(e) => { e.stopPropagation(); zoom(src); }}
+            className="relative overflow-hidden rounded-sm bg-panel cursor-zoom-in"
+          >
+            <img src={src} className="w-full h-full object-cover" />
+            <span className="absolute bottom-1 left-1 text-[9px] font-mono font-bold uppercase tracking-wider bg-black/60 text-white px-1.5 py-[3px] rounded">
+              {(k.match(/_(\d+x\d+)$/) || ["", k])[1].replace("x", ":")}
+            </span>
+          </button>
+        ))}
       </div>
     );
   }
@@ -231,19 +269,12 @@ function Placeholder({ text }: { text: string }) {
   );
 }
 
-function ZoomImg({
-  src,
-  label,
-  filename,
-  onZoom,
-}: {
-  src: string;
-  label: string;
-  filename: string;
-  onZoom: (src: string, label: string, filename: string) => void;
-}) {
+function ZoomImg({ src, onZoom }: { src: string; onZoom: (src: string) => void }) {
   return (
-    <button onClick={(e) => { e.stopPropagation(); onZoom(src, label, filename); }} className="absolute inset-0 cursor-zoom-in">
+    <button
+      onClick={(e) => { e.stopPropagation(); onZoom(src); }}
+      className="absolute inset-0 cursor-zoom-in"
+    >
       <img src={src} className="w-full h-full object-contain" />
     </button>
   );

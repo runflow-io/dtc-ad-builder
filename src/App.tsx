@@ -116,36 +116,14 @@ export default function App() {
     return `Ready · ${total} asset${total === 1 ? "" : "s"} · ~${30 + (sceneCount + ratioCount) * 15}s`;
   }, [keysOk, source, running, operations, platforms]);
 
-  // === collect a fresh, deduped, ordered lightbox set whenever an image is clicked ===
-  const buildLightboxItems = (clickedSrc: string): { items: LightboxItem[]; index: number } => {
-    const ordered: Array<{ src: string; label: string; filename: string }> = [];
-    const seen = new Set<string>();
-
-    const push = (src: string | undefined, label: string, filename: string) => {
-      if (!src || seen.has(src)) return;
-      seen.add(src);
-      ordered.push({ src, label, filename });
-    };
-
-    push(assetUrls["__source"], "Supplier image", "source");
-    push(assetUrls.cutout, "RGBA cutout", "01_cutout.png");
-    push(assetUrls.white, "White studio (Amazon main)", "02_white_studio.jpg");
-    push(assetUrls.life_a, "Lifestyle A", "03_lifestyle_a.jpg");
-    push(assetUrls.life_b, "Lifestyle B", "04_lifestyle_b.jpg");
-    push(assetUrls.life_c, "Lifestyle C", "05_lifestyle_c.jpg");
-    push(assetUrls.hero, "9:16 hero (TikTok / Reel)", "06_hero_9x16.jpg");
-    push(assetUrls.ad, "1:1 ad creative", "07_ad_1x1.jpg");
-
-    let idx = ordered.findIndex((i) => i.src === clickedSrc);
-    if (idx < 0) idx = 0;
-    return { items: ordered, index: idx };
-  };
-
-  const onZoom = (src: string, _label: string, _filename: string) => {
-    const { items, index } = buildLightboxItems(src);
+  // Each consumer (Pipeline, ResultGrid, PackDetail) builds its OWN ordered
+  // list of LightboxItems and hands it to onZoom. This decouples the lightbox
+  // from any single source of truth for assetUrls — important because
+  // PackDetail's URLs are local to that component.
+  const onZoom = (items: LightboxItem[], startIndex: number) => {
     if (!items.length) return;
     setLbItems(items);
-    setLbIndex(index);
+    setLbIndex(startIndex >= 0 && startIndex < items.length ? startIndex : 0);
   };
 
   const resetForNew = () => {

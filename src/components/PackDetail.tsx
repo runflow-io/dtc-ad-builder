@@ -1,13 +1,15 @@
-import { ArrowLeft, ExternalLink, Download } from "lucide-react";
-import { useEffect, useState } from "react";
+import { ArrowLeft, ExternalLink, Download, Info } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { workflowMeta } from "../lib/options";
 import type { RecentPack } from "../lib/history";
 import { buildZip } from "../lib/zip";
+import type { LightboxItem } from "./Lightbox";
+import type { ZoomFn } from "./Pipeline";
 
 type Props = {
   pack: RecentPack;
   onClose: () => void;
-  onZoom: (src: string, label: string, filename: string) => void;
+  onZoom: ZoomFn;
 };
 
 export function PackDetail({ pack, onClose, onZoom }: Props) {
@@ -35,6 +37,27 @@ export function PackDetail({ pack, onClose, onZoom }: Props) {
   }, [pack.id]);
 
   const workflows = pack.workflows || [];
+
+  // Build a stable, ordered list of LightboxItems for THIS pack so the
+  // global lightbox can step through the right URLs (App.tsx's assetUrls
+  // are scoped to the live pipeline run, not historical packs).
+  const lightboxItems: LightboxItem[] = useMemo(() => {
+    const items: LightboxItem[] = [];
+    const seen = new Set<string>();
+    for (const a of pack.assets) {
+      const src = assetUrls[a.key];
+      if (!src || seen.has(src)) continue;
+      seen.add(src);
+      items.push({ src, label: a.label, filename: `runflow-pack-${pack.id}-${a.filename}` });
+    }
+    return items;
+  }, [pack.assets, pack.id, assetUrls]);
+
+  const handleZoom = (clickedSrc: string) => {
+    if (!lightboxItems.length) return;
+    const idx = Math.max(0, lightboxItems.findIndex((i) => i.src === clickedSrc));
+    onZoom(lightboxItems, idx);
+  };
 
   return (
     <div>
@@ -78,36 +101,47 @@ export function PackDetail({ pack, onClose, onZoom }: Props) {
       </div>
 
       {/* workflows used */}
-      {workflows.length > 0 ? (
-        <div className="mb-7 p-4 bg-panel-2/50 border border-line rounded-xl">
-          <div className="font-mono uppercase tracking-wider text-[11px] text-muted font-bold mb-2.5">
-            Workflows under the hood
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {workflows.map((slug) => {
-              const meta = workflowMeta(slug);
-              return (
-                <a
-                  key={slug}
-                  href={meta.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-panel border border-line hover:border-amber-border hover:shadow-soft rounded-full text-[12px] font-semibold text-ink-2 hover:text-amber transition-all"
-                >
-                  <code className="font-mono text-[10px] text-amber">{slug}</code>
-                  <span>·</span>
-                  <span>{meta.label}</span>
-                  <ExternalLink className="w-3 h-3 opacity-60" />
-                </a>
-              );
-            })}
-          </div>
-          <p className="text-[11px] text-muted mt-3 leading-relaxed">
-            Each chip links to the Runflow workflow page so you can see inputs, outputs,
-            and pricing under the hood.
-          </p>
+      <div className="mb-7 p-4 bg-panel-2/50 border border-line rounded-xl">
+        <div className="font-mono uppercase tracking-wider text-[11px] text-muted font-bold mb-2.5">
+          Workflows under the hood
         </div>
-      ) : null}
+        {workflows.length > 0 ? (
+          <>
+            <div className="flex flex-wrap gap-2">
+              {workflows.map((slug) => {
+                const meta = workflowMeta(slug);
+                return (
+                  <a
+                    key={slug}
+                    href={meta.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-panel border border-line hover:border-amber-border hover:shadow-soft rounded-full text-[12px] font-semibold text-ink-2 hover:text-amber transition-all"
+                  >
+                    <code className="font-mono text-[10px] text-amber">{slug}</code>
+                    <span>·</span>
+                    <span>{meta.label}</span>
+                    <ExternalLink className="w-3 h-3 opacity-60" />
+                  </a>
+                );
+              })}
+            </div>
+            <p className="text-[11px] text-muted mt-3 leading-relaxed">
+              Each chip links to the Runflow workflow page so you can see inputs, outputs,
+              and pricing under the hood.
+            </p>
+          </>
+        ) : (
+          <div className="flex items-start gap-2.5 text-[12px] text-muted leading-relaxed">
+            <Info className="w-4 h-4 mt-0.5 flex-shrink-0 text-amber" />
+            <p>
+              This pack was generated before workflow tracking was added (v0.3). Newer
+              packs show every Runflow / OpenAI Solution that ran, each linked to its
+              workflow page. Generate a new pack to see the chips.
+            </p>
+          </div>
+        )}
+      </div>
 
       {/* asset grid */}
       <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-4 mb-10">
@@ -120,7 +154,7 @@ export function PackDetail({ pack, onClose, onZoom }: Props) {
               className="bg-panel border border-line rounded-[10px] overflow-hidden flex flex-col hover:border-amber-border hover:shadow-soft transition-all"
             >
               <button
-                onClick={() => onZoom(url, a.label, `runflow-pack-${pack.id}-${a.filename}`)}
+                onClick={() => handleZoom(url)}
                 className={
                   "aspect-square flex items-center justify-center overflow-hidden cursor-zoom-in " +
                   (a.key === "cutout" ? "checker" : "bg-panel-2")
