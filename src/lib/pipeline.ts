@@ -203,6 +203,66 @@ async function genLifestyle(
   return url;
 }
 
+// Pad a square white-studio asset into a target aspect ratio with pure
+// white pixels. We do this client-side because runflow/smart-resize uses
+// AI outpainting — perfect for lifestyle scenes (extends the scene) but
+// it invents a fake studio floor when handed the white-backdrop shot.
+async function padToRatioWhite(url: string, ratio: AspectRatio): Promise<Blob> {
+  const [wR, hR] = ratio.split(":").map(Number);
+  const target = wR / hR;
+  // Fetch through our blob helper first so the canvas isn't tainted by
+  // a cross-origin image load (the runflow CDN doesn't set CORS headers
+  // suitable for direct <img crossOrigin> use).
+  const sourceBlob = await downloadBlob(url);
+  const blobUrl = URL.createObjectURL(sourceBlob);
+  let img: HTMLImageElement;
+  try {
+    img = await loadImage(blobUrl);
+  } finally {
+    URL.revokeObjectURL(blobUrl);
+  }
+  const srcW = img.naturalWidth;
+  const srcH = img.naturalHeight;
+  let tw = srcW;
+  let th = srcH;
+  if (target >= srcW / srcH) {
+    // wider: keep source height, grow width
+    th = srcH;
+    tw = Math.round(srcH * target);
+  } else {
+    // taller: keep source width, grow height
+    tw = srcW;
+    th = Math.round(srcW / target);
+  }
+  const canvas = document.createElement("canvas");
+  canvas.width = tw;
+  canvas.height = th;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new RunflowError("canvas 2d unavailable");
+  ctx.fillStyle = "#FFFFFF";
+  ctx.fillRect(0, 0, tw, th);
+  const dx = Math.round((tw - srcW) / 2);
+  const dy = Math.round((th - srcH) / 2);
+  ctx.drawImage(img, dx, dy);
+  return await new Promise((resolve, reject) =>
+    canvas.toBlob(
+      (b) => (b ? resolve(b) : reject(new RunflowError("toBlob null"))),
+      "image/jpeg",
+      0.92
+    )
+  );
+}
+
+function loadImage(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new RunflowError(`image load failed: ${src}`));
+    img.src = src;
+  });
+}
+
 async function smartResize(url: string, ratio: AspectRatio, apiKey: string): Promise<string> {
   const run = await runSolution("runflow/smart-resize", {
     image_url: url,
@@ -391,11 +451,15 @@ export async function runPipeline(input: PipelineInput, onProgress: ProgressFn):
     emit("scenes", "skipped");
   }
 
-  // 6 — ratios (smart-resize per selected platform aspect ratio)
+  // 6 — ratios. Lifestyle / cutout scenes go through runflow/smart-resize
+  // (AI outpainting extends the scene naturally). The white-studio asset
+  // uses a client-side white-pad instead, because smart-resize hallucinates
+  // a fake studio floor when asked to extend pure white.
   const ratios: AspectRatio[] = uniqueRatios(platforms);
   if (ratios.length > 0 && sceneOutputs.length > 0) {
     emit("ratios", "running");
-    trackWorkflow("runflow/smart-resize");
+    const usesSmartResize = sceneOutputs.some((s) => s.key !== "white");
+    if (usesSmartResize) trackWorkflow("runflow/smart-resize");
     const resizeTasks: Array<Promise<AssetFile>> = [];
     let slot = 10;
     for (const scene of sceneOutputs) {
@@ -408,12 +472,20 @@ export async function runPipeline(input: PipelineInput, onProgress: ProgressFn):
         const label = `${scene.label} · ${ratio}`;
         const description = scene.description;
         slot++;
-        resizeTasks.push(
-          smartResize(scene.url, ratio, keys.runflow).then(async (url) => {
-            const blob = await downloadBlob(url);
-            return { key, label, description, filename, blob };
-          })
-        );
+        if (scene.key === "white") {
+          resizeTasks.push(
+            padToRatioWhite(scene.url, ratio).then((blob) => ({
+              key, label, description, filename, blob,
+            }))
+          );
+        } else {
+          resizeTasks.push(
+            smartResize(scene.url, ratio, keys.runflow).then(async (url) => {
+              const blob = await downloadBlob(url);
+              return { key, label, description, filename, blob };
+            })
+          );
+        }
       }
     }
     if (resizeTasks.length > 0) {
