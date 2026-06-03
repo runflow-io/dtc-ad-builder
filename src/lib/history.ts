@@ -30,7 +30,7 @@ export type RecentPack = {
   analysis: Analysis;
   thumb: Blob;          // representative thumbnail
   thumbName: string;
-  assets: { key: string; label: string; filename: string; blob: Blob }[];
+  assets: { key: string; label: string; description?: string; filename: string; blob: Blob }[];
   /** Runflow / OpenAI workflow slugs that ran for this pack (for "under the hood" links) */
   workflows?: string[];
 };

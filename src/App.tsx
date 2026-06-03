@@ -208,8 +208,14 @@ export default function App() {
           } else if (u.type === "analysis") {
             setAnalysis(u.analysis);
           } else if (u.type === "asset") {
-            // labels come from the pipeline (dynamic per selection)
-            collected.push({ key: u.key, label: u.label, blob: u.blob, filename: u.filename });
+            // labels + description come from the pipeline (dynamic per selection)
+            collected.push({
+              key: u.key,
+              label: u.label,
+              description: u.description,
+              blob: u.blob,
+              filename: u.filename,
+            });
             const blobUrl = URL.createObjectURL(u.blob);
             setAssetUrls((prev) => ({ ...prev, [u.key]: blobUrl }));
           } else if (u.type === "workflow") {
@@ -242,7 +248,13 @@ export default function App() {
           analysis: analysis as Analysis,
           thumb: thumbAsset.blob,
           thumbName: thumbAsset.filename,
-          assets: finalAssets.map((a) => ({ key: a.key, label: a.label, filename: a.filename, blob: a.blob })),
+          assets: finalAssets.map((a) => ({
+            key: a.key,
+            label: a.label,
+            description: a.description,
+            filename: a.filename,
+            blob: a.blob,
+          })),
           workflows: result.workflows || workflowAcc,
         };
         await savePack(pack);

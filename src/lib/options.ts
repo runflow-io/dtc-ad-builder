@@ -130,56 +130,46 @@ export type WorkflowMeta = {
   external?: boolean;
 };
 
-// Runflow has TWO public URL patterns depending on whether the call goes
-// through the Solutions API or the Model API.
-//
-//   Solutions (high-level workflows that own a pipeline):
-//     https://www.runflow.io/api/<solution-slug>
-//   Models (individual model endpoints exposed by provider):
-//     https://app.runflow.io/models/<provider>/<model-slug>
-//
-// runflow/* slugs are Solutions. openai/* slugs are Models (proxied via the
-// Model API). Direct OpenAI calls (gpt-4o vision) go to OpenAI docs.
+// Every workflow page lives on app.runflow.io at /models/<provider>/<slug>.
+// Direct (non-Runflow) calls — currently only gpt-4o vision — link to the
+// provider's own docs since they don't have a Runflow page.
 export const WORKFLOW_META: Record<string, WorkflowMeta> = {
-  // Solutions
   "runflow/product-isolation": {
     label: "Product Isolation",
-    url: "https://www.runflow.io/api/product-isolation",
+    url: "https://app.runflow.io/models/runflow/product-isolation",
   },
   "runflow/object-removal/prompt": {
     label: "Object Removal (Prompt)",
-    url: "https://www.runflow.io/api/object-removal",
+    url: "https://app.runflow.io/models/runflow/object-removal/prompt",
   },
   "runflow/object-removal": {
     label: "Object Removal",
-    url: "https://www.runflow.io/api/object-removal",
+    url: "https://app.runflow.io/models/runflow/object-removal",
   },
   "runflow/smart-resize": {
     label: "Smart Resize",
-    url: "https://www.runflow.io/api/smart-resize",
+    url: "https://app.runflow.io/models/runflow/smart-resize",
   },
   "runflow/smart-segmentation": {
     label: "Smart Segmentation",
-    url: "https://www.runflow.io/api/background-separation",
+    url: "https://app.runflow.io/models/runflow/smart-segmentation",
   },
   "runflow/outpaint/aspect-ratio": {
     label: "Outpaint (Aspect Ratio)",
-    url: "https://www.runflow.io/api/outpainting",
+    url: "https://app.runflow.io/models/runflow/outpaint/aspect-ratio",
   },
   "runflow/model-removal": {
     label: "Model Removal",
-    url: "https://www.runflow.io/api/on-model-removal",
+    url: "https://app.runflow.io/models/runflow/model-removal",
   },
   "runflow/background-replace": {
     label: "Background Replace",
-    url: "https://www.runflow.io/api/replace-background",
+    url: "https://app.runflow.io/models/runflow/background-replace",
   },
-  // Models — Runflow Model API pages live on app.runflow.io
   "openai/gpt-image-2/edit": {
     label: "GPT Image 2 — Edit",
     url: "https://app.runflow.io/models/openai/gpt-image-2/edit",
   },
-  // Direct OpenAI calls (not proxied through Runflow) — OpenAI docs
   "openai/gpt-4o": {
     label: "GPT-4o (vision)",
     url: "https://platform.openai.com/docs/models/gpt-4o",
@@ -189,12 +179,9 @@ export const WORKFLOW_META: Record<string, WorkflowMeta> = {
 
 export function workflowMeta(slug: string): WorkflowMeta {
   if (WORKFLOW_META[slug]) return WORKFLOW_META[slug];
-  // Fallback: route runflow/* to Solutions catalog, everything else to Model API page
-  const isRunflowSolution = slug.startsWith("runflow/");
+  // Fallback: every slug lives on app.runflow.io/models/<slug>
   return {
     label: slug,
-    url: isRunflowSolution
-      ? `https://www.runflow.io/api/${slug.split("/").pop()}`
-      : `https://app.runflow.io/models/${slug}`,
+    url: `https://app.runflow.io/models/${slug}`,
   };
 }

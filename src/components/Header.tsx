@@ -12,7 +12,7 @@ export function Header({ keysOk, onOpenSettings, onOpenHowToStart }: Props) {
       <div className="flex items-center gap-3">
         <div
           className="w-8 h-3.5 rounded-full"
-          style={{ background: "linear-gradient(90deg, #1a1a1a 0%, #d97706 100%)" }}
+          style={{ background: "linear-gradient(90deg, #18181B 0%, #F59E0B 100%)" }}
         />
         <div className="font-bold text-lg tracking-tight">
           Run<span className="text-amber">flow</span>

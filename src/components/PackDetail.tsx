@@ -180,8 +180,21 @@ export function PackDetail({ pack, onClose, onZoom }: Props) {
                       />
                     </button>
                     <figcaption className="p-3 flex flex-col gap-1.5">
-                      <div className="text-xs font-semibold leading-snug">
-                        {a.label || a.key}
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <div className="text-xs font-semibold leading-snug truncate">
+                          {a.label || a.key}
+                        </div>
+                        {a.description ? (
+                          <div className="relative inline-flex group">
+                            <Info className="w-3 h-3 text-muted hover:text-amber flex-shrink-0 cursor-help" />
+                            <div
+                              role="tooltip"
+                              className="invisible group-hover:visible absolute z-30 left-0 bottom-full mb-1.5 w-60 p-2.5 bg-ink text-white text-[11px] leading-snug rounded-md shadow-soft"
+                            >
+                              {a.description}
+                            </div>
+                          </div>
+                        ) : null}
                       </div>
                       <a
                         href={url}

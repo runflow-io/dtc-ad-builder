@@ -48,7 +48,7 @@ export type Analysis = {
 export type PipelineUpdate =
   | { type: "step"; key: StepKey; status: StepStatus; message?: string }
   | { type: "analysis"; analysis: Analysis }
-  | { type: "asset"; key: string; label: string; blob: Blob; filename: string }
+  | { type: "asset"; key: string; label: string; description?: string; blob: Blob; filename: string }
   | { type: "workflow"; slug: string };
 
 export type ProgressFn = (u: PipelineUpdate) => void;
@@ -215,7 +215,8 @@ export type PipelineInput = {
 
 export type AssetFile = {
   key: string;
-  label: string;
+  label: string;          // Short display name (e.g. "Lifestyle A")
+  description?: string;   // Longer context (e.g. the scene prompt) — shown via info icon hover
   filename: string;
   blob: Blob;
 };
@@ -235,7 +236,14 @@ export async function runPipeline(input: PipelineInput, onProgress: ProgressFn):
 
   const pushAsset = (a: AssetFile) => {
     assets.push(a);
-    onProgress({ type: "asset", key: a.key, label: a.label, blob: a.blob, filename: a.filename });
+    onProgress({
+      type: "asset",
+      key: a.key,
+      label: a.label,
+      description: a.description,
+      blob: a.blob,
+      filename: a.filename,
+    });
   };
 
   const trackWorkflow = (slug: string) => {
@@ -270,7 +278,13 @@ export async function runPipeline(input: PipelineInput, onProgress: ProgressFn):
       trackWorkflow("runflow/object-removal/prompt");
       cleanedUrl = await removeOriginalProduct(sourceUrl, analysis.cleanup_prompt, keys.runflow);
       const cleanedBlob = await downloadBlob(cleanedUrl);
-      pushAsset({ key: "cleaned", label: "Cleaned source", filename: "00_cleaned.jpg", blob: cleanedBlob });
+      pushAsset({
+        key: "cleaned",
+        label: "Cleaned source",
+        description: `Stripped via prompt: "${analysis.cleanup_prompt}"`,
+        filename: "00_cleaned.jpg",
+        blob: cleanedBlob,
+      });
       emit("cleanup", "done");
     } else {
       emit("cleanup", "skipped");
@@ -288,7 +302,13 @@ export async function runPipeline(input: PipelineInput, onProgress: ProgressFn):
     cutoutUrl = await isolateProduct(cleanedUrl, keys.runflow);
     if (ops.has("isolate")) {
       const cutoutBlob = await downloadBlob(cutoutUrl);
-      pushAsset({ key: "cutout", label: "RGBA cutout", filename: "01_cutout.png", blob: cutoutBlob });
+      pushAsset({
+        key: "cutout",
+        label: "RGBA cutout",
+        description: "Background fully removed — transparent PNG. Drop into PDPs, ad creatives, or anywhere a transparent product is needed.",
+        filename: "01_cutout.png",
+        blob: cutoutBlob,
+      });
     }
     emit("cutout", "done");
   } else {
@@ -297,7 +317,7 @@ export async function runPipeline(input: PipelineInput, onProgress: ProgressFn):
 
   // 5 — scenes (parallel fan-out of white studio + 3 lifestyle)
   // Track these for the ratios fan-out step.
-  type SceneOutput = { key: string; url: string; label: string };
+  type SceneOutput = { key: string; url: string; label: string; description?: string };
   const sceneOutputs: SceneOutput[] = [];
 
   const wantsWhite = ops.has("background_replace");
@@ -313,7 +333,8 @@ export async function runPipeline(input: PipelineInput, onProgress: ProgressFn):
         genWhiteStudio(cutoutUrl, keys.runflow).then((url) => ({
           key: "white",
           url,
-          label: "White studio (Amazon main)",
+          label: "White studio",
+          description: "Amazon main-image compliant — pure white seamless backdrop, subtle contact shadow, three-quarter angle.",
         }))
       );
     }
@@ -328,7 +349,10 @@ export async function runPipeline(input: PipelineInput, onProgress: ProgressFn):
           genLifestyle(cutoutUrl!, scene, referenceUrl, keys.runflow).then((url) => ({
             key: `life_${tags[i]}`,
             url,
-            label: `Lifestyle ${tags[i].toUpperCase()} — ${scene}`,
+            // Keep label short so the UI doesn't get noisy. Full prompt
+            // lives in description and shows on info-icon hover.
+            label: `Lifestyle ${tags[i].toUpperCase()}`,
+            description: scene,
           }))
         );
       });
@@ -342,7 +366,13 @@ export async function runPipeline(input: PipelineInput, onProgress: ProgressFn):
     for (const r of results) {
       const blob = await downloadBlob(r.url);
       const filename = `${String(idx).padStart(2, "0")}_${r.key}.jpg`;
-      pushAsset({ key: r.key, label: r.label, filename, blob });
+      pushAsset({
+        key: r.key,
+        label: r.label,
+        description: r.description,
+        filename,
+        blob,
+      });
       idx++;
     }
     emit("scenes", "done");
@@ -364,12 +394,13 @@ export async function runPipeline(input: PipelineInput, onProgress: ProgressFn):
         const ratioSlug = ratio.replace(":", "x");
         const filename = `${String(slot).padStart(2, "0")}_${scene.key}_${ratioSlug}.jpg`;
         const key = `${scene.key}_${ratioSlug}`;
-        const label = `${scene.label.split(" — ")[0]} · ${ratio}`;
+        const label = `${scene.label} · ${ratio}`;
+        const description = scene.description;
         slot++;
         resizeTasks.push(
           smartResize(scene.url, ratio, keys.runflow).then(async (url) => {
             const blob = await downloadBlob(url);
-            return { key, label, filename, blob };
+            return { key, label, description, filename, blob };
           })
         );
       }
