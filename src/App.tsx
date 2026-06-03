@@ -14,6 +14,7 @@ import { PacksGallery } from "./components/PacksGallery";
 import { PackDetail } from "./components/PackDetail";
 import { Lightbox, type LightboxItem } from "./components/Lightbox";
 import { CropperModal } from "./components/CropperModal";
+import { WorkflowsDrawer } from "./components/WorkflowsDrawer";
 import { loadKeys, saveKeys, type Keys } from "./lib/keys";
 import { runPipeline, type Analysis, type AssetFile, type StepKey, type StepStatus } from "./lib/pipeline";
 import { savePack, listPacks, type RecentPack } from "./lib/history";
@@ -40,6 +41,7 @@ export default function App() {
   const [keys, setKeys] = useState<Keys>(() => loadKeys());
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [howToOpen, setHowToOpen] = useState(false);
+  const [workflowsOpen, setWorkflowsOpen] = useState(false);
 
   const [source, setSource] = useState<File | null>(null);
   const [reference, setReference] = useState<File | null>(null);
@@ -602,6 +604,19 @@ export default function App() {
           onCancel={() => setPendingCrop(null)}
         />
       ) : null}
+
+      {/* Right-edge tab → opens the Runflow models catalog drawer */}
+      <button
+        type="button"
+        onClick={() => setWorkflowsOpen(true)}
+        title="Browse all Runflow workflows"
+        className="fixed right-0 top-1/2 -translate-y-1/2 z-30 inline-flex items-center gap-1.5 px-3 py-2.5 bg-ink hover:bg-amber text-white text-[11px] font-mono uppercase tracking-wider font-bold rounded-l-md shadow-card transition-colors"
+        style={{ writingMode: "vertical-rl", textOrientation: "mixed" }}
+      >
+        See all workflows
+      </button>
+
+      <WorkflowsDrawer open={workflowsOpen} onClose={() => setWorkflowsOpen(false)} />
     </div>
   );
 }
