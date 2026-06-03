@@ -21,7 +21,7 @@ const CANONICAL_KEYS: Array<{ key: string; label: string; filename: string }> = 
   { key: "__source", label: "Supplier image", filename: "source" },
   { key: "cleaned", label: "Cleaned source", filename: "00_cleaned.jpg" },
   { key: "cutout", label: "RGBA cutout", filename: "01_cutout.png" },
-  { key: "white", label: "White studio (Amazon main)", filename: "02_white_studio.jpg" },
+  { key: "white", label: "White studio", filename: "02_white_studio.jpg" },
   { key: "life_a", label: "Lifestyle A", filename: "03_lifestyle_a.jpg" },
   { key: "life_b", label: "Lifestyle B", filename: "04_lifestyle_b.jpg" },
   { key: "life_c", label: "Lifestyle C", filename: "05_lifestyle_c.jpg" },

@@ -59,7 +59,7 @@ const CATEGORY_SPECS: Record<AssetCategory, CategorySpec> = {
   studio: {
     category: "studio",
     title: "White studio",
-    hint: "Pure-white seamless backdrop — Amazon main-image compliant",
+    hint: "Clean pure-white seamless backdrop · square version is Amazon-compliant",
     folder: "2-studio",
   },
   lifestyle: {

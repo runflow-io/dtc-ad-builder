@@ -27,19 +27,18 @@ export function HowItWorks() {
       <div className="font-mono uppercase tracking-wider text-[11px] text-muted font-bold mb-3">
         How it works
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {STEPS.map((s) => {
           const Icon = s.icon;
           return (
-            <div
-              key={s.n}
-              className="bg-panel border border-line rounded-xl p-5 hover:border-amber-border hover:shadow-soft transition-all"
-            >
+            <div key={s.n}>
               <div className="flex items-center gap-2.5 mb-3">
-                <div className="w-9 h-9 rounded-full bg-green text-white font-bold text-base flex items-center justify-center shadow-soft">
-                  {s.n}
+                <div className="w-9 h-9 rounded-full bg-green text-white flex items-center justify-center shadow-soft">
+                  <Icon className="w-4 h-4" />
                 </div>
-                <Icon className="w-5 h-5 text-ink-2" />
+                <span className="font-mono font-bold text-[11px] text-muted">
+                  STEP {s.n}
+                </span>
               </div>
               <h3 className="text-base font-semibold mb-1.5 leading-snug">{s.title}</h3>
               <p className="text-[13px] text-ink-2 leading-relaxed">{s.body}</p>

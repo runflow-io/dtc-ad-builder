@@ -345,7 +345,7 @@ export async function runPipeline(input: PipelineInput, onProgress: ProgressFn):
           key: "white",
           url,
           label: "White studio",
-          description: "Amazon main-image compliant — pure white seamless backdrop, subtle contact shadow, three-quarter angle.",
+          description: "Clean product shot on a pure-white seamless backdrop, subtle contact shadow, three-quarter angle. The 1:1 version is Amazon main-image compliant.",
         }))
       );
     }
