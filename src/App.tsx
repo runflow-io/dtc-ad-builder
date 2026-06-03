@@ -13,6 +13,7 @@ import { Tabs, type Tab } from "./components/Tabs";
 import { PacksGallery } from "./components/PacksGallery";
 import { PackDetail } from "./components/PackDetail";
 import { Lightbox, type LightboxItem } from "./components/Lightbox";
+import { CropperModal } from "./components/CropperModal";
 import { loadKeys, saveKeys, type Keys } from "./lib/keys";
 import { runPipeline, type Analysis, type AssetFile, type StepKey, type StepStatus } from "./lib/pipeline";
 import { savePack, listPacks, type RecentPack } from "./lib/history";
@@ -42,6 +43,14 @@ export default function App() {
 
   const [source, setSource] = useState<File | null>(null);
   const [reference, setReference] = useState<File | null>(null);
+
+  // File pending the crop modal — supplier-image drops auto-open it, the
+  // "Crop" button on the preview re-opens it on the current source.
+  const [pendingCrop, setPendingCrop] = useState<File | null>(null);
+  const handleSourceUpload = (f: File | null) => {
+    if (!f) { setSource(null); return; }
+    setPendingCrop(f);
+  };
 
   // Sensible defaults — closest equivalent to the original 7-asset brand pack.
   const [operations, setOperations] = useState<Operation[]>([
@@ -343,7 +352,8 @@ export default function App() {
                 hint="Drop the supplier photo"
                 subHint="Any AliExpress / 1688 / Alibaba / supplier image you saved"
                 file={source}
-                onChange={setSource}
+                onChange={handleSourceUpload}
+                onCrop={source ? () => setPendingCrop(source) : undefined}
               />
               <Dropzone
                 label="2 · Reference style"
@@ -569,6 +579,14 @@ export default function App() {
           index={lbIndex}
           onClose={() => setLbItems(null)}
           onIndexChange={setLbIndex}
+        />
+      ) : null}
+
+      {pendingCrop ? (
+        <CropperModal
+          file={pendingCrop}
+          onConfirm={(f) => { setSource(f); setPendingCrop(null); }}
+          onCancel={() => setPendingCrop(null)}
         />
       ) : null}
     </div>

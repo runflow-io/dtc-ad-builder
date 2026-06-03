@@ -1,5 +1,5 @@
 import { useRef, useState, useEffect } from "react";
-import { X } from "lucide-react";
+import { X, Crop as CropIcon } from "lucide-react";
 
 type Props = {
   label: string;
@@ -8,9 +8,11 @@ type Props = {
   subHint?: string;
   file: File | null;
   onChange: (file: File | null) => void;
+  /** Optional — shows a "Crop" affordance on the preview tile. */
+  onCrop?: () => void;
 };
 
-export function Dropzone({ label, required, hint, subHint, file, onChange }: Props) {
+export function Dropzone({ label, required, hint, subHint, file, onChange, onCrop }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [drag, setDrag] = useState(false);
   const [preview, setPreview] = useState<string | null>(null);
@@ -92,14 +94,28 @@ export function Dropzone({ label, required, hint, subHint, file, onChange }: Pro
         {preview ? (
           <>
             <img src={preview} className="max-w-full max-h-[260px] block pointer-events-none" />
-            <button
-              type="button"
-              onClick={clear}
-              aria-label="Remove image"
-              className="absolute top-3 right-3 z-20 w-8 h-8 rounded-full bg-black/65 hover:bg-red text-white flex items-center justify-center shadow-soft transition-colors"
-            >
-              <X className="w-4 h-4" strokeWidth={2.5} />
-            </button>
+            <div className="absolute top-3 right-3 z-20 flex items-center gap-1.5">
+              {onCrop ? (
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); e.preventDefault(); onCrop(); }}
+                  aria-label="Crop image"
+                  title="Crop image"
+                  className="inline-flex items-center gap-1 h-8 px-2.5 rounded-full bg-black/65 hover:bg-amber text-white text-[11px] font-semibold shadow-soft transition-colors"
+                >
+                  <CropIcon className="w-3.5 h-3.5" strokeWidth={2.5} />
+                  Crop
+                </button>
+              ) : null}
+              <button
+                type="button"
+                onClick={clear}
+                aria-label="Remove image"
+                className="w-8 h-8 rounded-full bg-black/65 hover:bg-red text-white flex items-center justify-center shadow-soft transition-colors"
+              >
+                <X className="w-4 h-4" strokeWidth={2.5} />
+              </button>
+            </div>
           </>
         ) : (
           <div className="text-center px-5 pointer-events-none">
