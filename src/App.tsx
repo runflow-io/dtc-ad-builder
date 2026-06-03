@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Header } from "./components/Header";
 import { SettingsModal } from "./components/SettingsModal";
+import { HowToStartModal } from "./components/HowToStartModal";
 import { Dropzone } from "./components/Dropzone";
 import { Pipeline } from "./components/Pipeline";
 import { ResultGrid } from "./components/ResultGrid";
@@ -29,6 +30,7 @@ function newJobId() {
 export default function App() {
   const [keys, setKeys] = useState<Keys>(() => loadKeys());
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [howToOpen, setHowToOpen] = useState(false);
 
   const [source, setSource] = useState<File | null>(null);
   const [reference, setReference] = useState<File | null>(null);
@@ -46,12 +48,12 @@ export default function App() {
   const [lbItems, setLbItems] = useState<LightboxItem[] | null>(null);
   const [lbIndex, setLbIndex] = useState(0);
 
-  // open settings automatically on first load if keys missing
+  // open how-to-start automatically on first ever visit (no keys yet, no prior pack)
   const firstMount = useRef(true);
   useEffect(() => {
     if (firstMount.current) {
       firstMount.current = false;
-      if (!keys.runflow || !keys.openai) setSettingsOpen(true);
+      if (!keys.runflow || !keys.openai) setHowToOpen(true);
     }
   }, [keys.runflow, keys.openai]);
 
@@ -235,7 +237,11 @@ export default function App() {
 
   return (
     <div className="max-w-[1280px] mx-auto px-8 pt-12 pb-20">
-      <Header keysOk={keysOk} onOpenSettings={() => setSettingsOpen(true)} />
+      <Header
+        keysOk={keysOk}
+        onOpenSettings={() => setSettingsOpen(true)}
+        onOpenHowToStart={() => setHowToOpen(true)}
+      />
 
       <section className="mb-9">
         <div className="font-mono uppercase tracking-widest text-[11px] text-amber font-bold mb-2.5">
@@ -311,6 +317,12 @@ export default function App() {
         initial={keys}
         onClose={() => setSettingsOpen(false)}
         onSave={(k) => { setKeys(k); saveKeys(k); setSettingsOpen(false); }}
+      />
+
+      <HowToStartModal
+        open={howToOpen}
+        onClose={() => setHowToOpen(false)}
+        onOpenSettings={() => setSettingsOpen(true)}
       />
 
       {lbItems ? (

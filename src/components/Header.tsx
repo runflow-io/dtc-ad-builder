@@ -1,11 +1,12 @@
-import { Settings } from "lucide-react";
+import { Settings, Sparkles } from "lucide-react";
 
 type Props = {
   keysOk: boolean;
   onOpenSettings: () => void;
+  onOpenHowToStart: () => void;
 };
 
-export function Header({ keysOk, onOpenSettings }: Props) {
+export function Header({ keysOk, onOpenSettings, onOpenHowToStart }: Props) {
   return (
     <header className="flex items-center justify-between mb-8">
       <div className="flex items-center gap-3">
@@ -18,6 +19,13 @@ export function Header({ keysOk, onOpenSettings }: Props) {
         </div>
       </div>
       <div className="flex items-center gap-2">
+        <button
+          onClick={onOpenHowToStart}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber hover:bg-amber/90 text-white text-xs font-semibold rounded-full shadow-soft transition-colors"
+        >
+          <Sparkles className="w-3.5 h-3.5" />
+          How to start?
+        </button>
         <span
           className={
             "font-mono uppercase tracking-wider text-[10px] px-2.5 py-1 rounded-full border " +
