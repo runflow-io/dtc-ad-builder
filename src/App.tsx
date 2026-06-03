@@ -140,6 +140,18 @@ export default function App() {
   // user can see what they'll get before dropping the image.
   const packBreakdown = useMemo(() => {
     const ratios = uniqueRatios(platforms).filter((r) => r !== "1:1");
+
+    // Resize-only mode: just the original + one resized variant per ratio.
+    if (operations.length === 1 && operations[0] === "resize_only") {
+      const parts: string[] = ["1 original"];
+      if (ratios.length) parts.push(`× ${ratios.length} resized ratio${ratios.length === 1 ? "" : "s"}`);
+      return {
+        total: 1 + ratios.length,
+        etaSec: 5 + ratios.length * 8,
+        parts,
+      };
+    }
+
     const sceneCount =
       (operations.includes("background_replace") ? 1 : 0) +
       (operations.includes("lifestyle_scenes") ? 3 : 0);

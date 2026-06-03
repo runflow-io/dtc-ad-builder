@@ -16,9 +16,13 @@ export function OperationPicker({ selected, hasReference, onChange }: Props) {
     else onChange([...selected, key]);
   };
 
+  // resize_only is a mode-switch, not a regular op — it's only reachable
+  // through the "Resize ad creative" preset, never the advanced grid.
+  const visibleOps = OPERATIONS.filter((o) => o.key !== "resize_only");
+
   return (
     <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-2.5">
-      {OPERATIONS.map((op) => {
+      {visibleOps.map((op) => {
         const isOn = selected.includes(op.key);
         const Icon = op.icon;
         const needsRef = REQUIRES_REFERENCE.includes(op.key) && !hasReference;

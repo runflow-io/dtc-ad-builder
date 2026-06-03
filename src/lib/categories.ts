@@ -5,7 +5,7 @@
 
 import { PLATFORMS } from "./options";
 
-export type AssetCategory = "cutout" | "studio" | "lifestyle" | "ratios" | "other";
+export type AssetCategory = "cutout" | "studio" | "lifestyle" | "ad_original" | "ratios" | "other";
 
 export type Categorized = {
   category: AssetCategory;
@@ -17,8 +17,9 @@ export function categorizeAsset(key: string): Categorized {
   if (key === "cutout" || key === "cleaned") return { category: "cutout" };
   if (key === "white") return { category: "studio" };
   if (/^life_[a-z]$/.test(key)) return { category: "lifestyle" };
+  if (key === "ad_original") return { category: "ad_original" };
 
-  // dynamic ratio outputs: e.g. life_a_9x16, white_4x5
+  // dynamic ratio outputs: e.g. life_a_9x16, white_4x5, ad_9x16
   const m = key.match(/^(.+)_(\d+x\d+)$/);
   if (m) {
     const ratio = m[2].replace("x", ":");
@@ -68,6 +69,12 @@ const CATEGORY_SPECS: Record<AssetCategory, CategorySpec> = {
     hint: "AI-picked scenes per product category — PDP gallery / IG feed",
     folder: "3-lifestyle",
   },
+  ad_original: {
+    category: "ad_original",
+    title: "Original",
+    hint: "Your input image, untouched",
+    folder: "0-original",
+  },
   ratios: {
     category: "ratios",
     title: "Per-platform ratios",
@@ -102,7 +109,7 @@ export function groupAssets<T extends { key: string }>(assets: T[]): Array<Group
   }
 
   // sort sections in a stable display order
-  const ORDER: AssetCategory[] = ["cutout", "studio", "lifestyle", "ratios", "other"];
+  const ORDER: AssetCategory[] = ["ad_original", "cutout", "studio", "lifestyle", "ratios", "other"];
   return Array.from(buckets.values())
     .sort((a, b) => {
       const aIdx = ORDER.indexOf(a.spec.category);

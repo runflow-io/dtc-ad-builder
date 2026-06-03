@@ -9,6 +9,7 @@ import {
   Image as ImageIcon,
   Sparkles,
   Tag,
+  Crop,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -18,7 +19,8 @@ export type Operation =
   | "remove_model"
   | "background_replace"
   | "lifestyle_scenes"
-  | "logo_inpaint";
+  | "logo_inpaint"
+  | "resize_only";
 
 export type OperationDef = {
   key: Operation;
@@ -74,6 +76,13 @@ export const OPERATIONS: OperationDef[] = [
     icon: Tag,
     outputs: [],
     soon: true,
+  },
+  {
+    key: "resize_only",
+    title: "Resize ad creative",
+    description: "Skip the brand pack — just smart-resize an existing image to every platform ratio",
+    icon: Crop,
+    outputs: [],
   },
 ];
 

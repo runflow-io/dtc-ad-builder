@@ -62,6 +62,23 @@ function pipelineZoom(assetUrls: Record<string, string>, clickedSrc: string, onZ
 
 function stepMeta(operations: Operation[], platforms: Platform[]) {
   const ops = new Set(operations);
+  const resizeOnly = ops.has("resize_only") && ops.size === 1;
+  const ratios = uniqueRatios(platforms).filter((r) => r !== "1:1");
+  const ratioFoot = ratios.length
+    ? `smart-resize → ${ratios.join(", ")}`
+    : "Skipped — only 1:1 selected";
+
+  if (resizeOnly) {
+    return {
+      upload: { num: 1, title: "Upload", foot: "Ad creative uploaded to Runflow assets" },
+      vision: { num: 2, title: "Vision", foot: "Skipped — resize-only mode" },
+      cleanup: { num: 3, title: "Cleanup", foot: "Skipped — resize-only mode" },
+      cutout: { num: 4, title: "Cutout", foot: "Skipped — resize-only mode" },
+      scenes: { num: 5, title: "Scenes", foot: "Skipped — resize-only mode" },
+      ratios: { num: 6, title: "Ratios", foot: ratioFoot },
+    } as Record<StepKey, { num: number; title: string; foot: string }>;
+  }
+
   const sceneParts: string[] = [];
   if (ops.has("background_replace")) sceneParts.push("white studio");
   if (ops.has("lifestyle_scenes")) sceneParts.push("3 lifestyle scenes");
@@ -69,17 +86,13 @@ function stepMeta(operations: Operation[], platforms: Platform[]) {
   const sceneFoot = sceneParts.length
     ? `gpt-image-2/edit · ${sceneParts.join(" + ")}`
     : "Skipped — no scene operations selected";
-  const ratios = uniqueRatios(platforms).filter((r) => r !== "1:1");
-  const ratioFoot = ratios.length
-    ? `smart-resize + white-pad → ${ratios.join(", ")}`
-    : "Skipped — only 1:1 selected";
   return {
     upload: { num: 1, title: "Upload", foot: "Supplier image uploaded to Runflow assets" },
     vision: { num: 2, title: "Vision", foot: "gpt-4o categorizes the product + drafts scene prompts" },
     cleanup: { num: 3, title: "Cleanup", foot: "Strips watermarks, supplier text, prop hands (skipped if clean)" },
     cutout: { num: 4, title: "Cutout", foot: "runflow/product-isolation extracts the product" },
     scenes: { num: 5, title: "Scenes", foot: sceneFoot },
-    ratios: { num: 6, title: "Ratios", foot: ratioFoot },
+    ratios: { num: 6, title: "Ratios", foot: `smart-resize + white-pad → ${ratios.join(", ") || "—"}` },
   } as Record<StepKey, { num: number; title: string; foot: string }>;
 }
 

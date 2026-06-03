@@ -1,4 +1,4 @@
-import { Check, Package, Sparkles, Shirt, Eraser, Wrench, Lock } from "lucide-react";
+import { Check, Package, Sparkles, Shirt, Eraser, Wrench, Lock, Crop } from "lucide-react";
 import type { Operation } from "../lib/options";
 import type { LucideIcon } from "lucide-react";
 
@@ -7,6 +7,7 @@ export type PresetKey =
   | "product_lifestyle"
   | "apparel_ghost"
   | "cleanup"
+  | "resize_ad"
   | "custom";
 
 type PresetDef = {
@@ -48,6 +49,13 @@ export const PRESETS: PresetDef[] = [
     description: "Strip watermarks, supplier text, prop hands · keep the original",
     operations: ["remove_object"],
     icon: Eraser,
+  },
+  {
+    key: "resize_ad",
+    title: "Resize ad creative",
+    description: "Drop a finished ad / image · smart-resize it to every selected platform ratio",
+    operations: ["resize_only"],
+    icon: Crop,
   },
   {
     key: "custom",

@@ -332,6 +332,60 @@ export async function runPipeline(input: PipelineInput, onProgress: ProgressFn):
   }
   emit("upload", "done");
 
+  // Resize-only mode: the user just wants their image fanned out to every
+  // selected platform ratio. Skip vision / cleanup / cutout / scenes; jump
+  // straight to the ratios fan-out with the source acting as the single
+  // "scene".
+  const resizeOnly = ops.has("resize_only") && ops.size === 1;
+  if (resizeOnly) {
+    emit("vision", "skipped");
+    emit("cleanup", "skipped");
+    emit("cutout", "skipped");
+    emit("scenes", "skipped");
+
+    // Save the original as the first asset so it shows up in the pack.
+    const originalBlob = await downloadBlob(sourceUrl);
+    pushAsset({
+      key: "ad_original",
+      label: "Original",
+      description: "Your input image, untouched. Resized variants follow below.",
+      filename: "00_original.jpg",
+      blob: originalBlob,
+    });
+
+    const ratios: AspectRatio[] = uniqueRatios(platforms).filter((r) => r !== "1:1");
+    if (ratios.length > 0) {
+      emit("ratios", "running");
+      trackWorkflow("runflow/smart-resize");
+      const tasks = ratios.map((ratio, i) => {
+        const ratioSlug = ratio.replace(":", "x");
+        const filename = `${String(10 + i).padStart(2, "0")}_ad_${ratioSlug}.jpg`;
+        return smartResize(sourceUrl, ratio, keys.runflow).then(async (url) => ({
+          key: `ad_${ratioSlug}`,
+          label: `Resized · ${ratio}`,
+          description: `Smart-resized to ${ratio}`,
+          filename,
+          blob: await downloadBlob(url),
+        }));
+      });
+      const results = await Promise.all(tasks);
+      for (const r of results) pushAsset(r);
+      emit("ratios", "done");
+    } else {
+      emit("ratios", "skipped");
+    }
+
+    // Build a minimal analysis so save-to-history doesn't choke on null.
+    const analysis: Analysis = {
+      product: source.name?.replace(/\.[^.]+$/, "") || "Ad creative",
+      category: "ad",
+      cleanup_prompt: "none",
+      lifestyle_scenes: [],
+    };
+    onProgress({ type: "analysis", analysis });
+    return { analysis, assets, workflows: Array.from(workflowsUsed) };
+  }
+
   // 2 — vision
   emit("vision", "running");
   trackWorkflow("openai/gpt-4o");
