@@ -1,4 +1,4 @@
-import { Check, Package, Sparkles, Shirt, Eraser, Wrench } from "lucide-react";
+import { Check, Package, Sparkles, Shirt, Eraser, Wrench, Lock } from "lucide-react";
 import type { Operation } from "../lib/options";
 import type { LucideIcon } from "lucide-react";
 
@@ -15,6 +15,8 @@ type PresetDef = {
   description: string;
   operations: Operation[];
   icon: LucideIcon;
+  /** Set when this preset can't be picked without the reference style image. */
+  requiresReference?: boolean;
 };
 
 export const PRESETS: PresetDef[] = [
@@ -28,9 +30,10 @@ export const PRESETS: PresetDef[] = [
   {
     key: "product_lifestyle",
     title: "Product + lifestyle",
-    description: "Cutout + studio + 3 AI-picked lifestyle scenes",
+    description: "Cutout + studio + 3 lifestyle scenes matched to your reference style",
     operations: ["isolate", "background_replace", "lifestyle_scenes"],
     icon: Sparkles,
+    requiresReference: true,
   },
   {
     key: "apparel_ghost",
@@ -68,23 +71,29 @@ export function detectPreset(ops: Operation[]): PresetKey {
 
 type Props = {
   selected: PresetKey;
+  hasReference: boolean;
   onChange: (preset: PresetKey, operations: Operation[]) => void;
 };
 
-export function PresetPicker({ selected, onChange }: Props) {
+export function PresetPicker({ selected, hasReference, onChange }: Props) {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5">
       {PRESETS.map((p) => {
         const isOn = selected === p.key;
         const Icon = p.icon;
+        const locked = !!p.requiresReference && !hasReference;
         return (
           <button
             key={p.key}
             type="button"
-            onClick={() => onChange(p.key, p.operations)}
+            disabled={locked}
+            onClick={() => !locked && onChange(p.key, p.operations)}
+            title={locked ? "Upload a reference style image to unlock this preset" : undefined}
             className={
               "relative text-left p-3 border rounded-lg transition-all flex flex-col gap-2 " +
-              (isOn
+              (locked
+                ? "border-line bg-panel-2/40 opacity-60 cursor-not-allowed"
+                : isOn
                 ? "border-amber bg-amber-soft shadow-soft"
                 : "border-line bg-panel hover:border-amber-border hover:shadow-soft")
             }
@@ -93,7 +102,7 @@ export function PresetPicker({ selected, onChange }: Props) {
               <div
                 className={
                   "flex-shrink-0 w-8 h-8 rounded-md flex items-center justify-center " +
-                  (isOn ? "bg-amber text-white" : "bg-panel-2 text-ink-2")
+                  (locked ? "bg-panel-2 text-faint" : isOn ? "bg-amber text-white" : "bg-panel-2 text-ink-2")
                 }
               >
                 <Icon className="w-4 h-4" />
@@ -101,7 +110,12 @@ export function PresetPicker({ selected, onChange }: Props) {
               <div className="text-sm font-semibold leading-snug">{p.title}</div>
             </div>
             <div className="text-[11px] text-muted leading-snug">{p.description}</div>
-            {isOn ? (
+            {locked ? (
+              <div className="absolute top-2 right-2 inline-flex items-center gap-1 text-[9px] font-mono uppercase tracking-wider px-1.5 py-[3px] rounded bg-panel border border-line text-muted">
+                <Lock className="w-2.5 h-2.5" />
+                Needs reference
+              </div>
+            ) : isOn ? (
               <div className="absolute top-2 right-2 w-4 h-4 rounded-full bg-amber text-white flex items-center justify-center">
                 <Check className="w-2.5 h-2.5" strokeWidth={3} />
               </div>

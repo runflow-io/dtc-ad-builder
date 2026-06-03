@@ -1,4 +1,5 @@
 import { useRef, useState, useEffect } from "react";
+import { X } from "lucide-react";
 
 type Props = {
   label: string;
@@ -28,6 +29,13 @@ export function Dropzone({ label, required, hint, subHint, file, onChange }: Pro
     if (!f) return;
     if (!f.type.startsWith("image/")) return;
     onChange(f);
+  };
+
+  const clear = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    onChange(null);
+    if (inputRef.current) inputRef.current.value = "";
   };
 
   return (
@@ -82,7 +90,17 @@ export function Dropzone({ label, required, hint, subHint, file, onChange }: Pro
           }}
         />
         {preview ? (
-          <img src={preview} className="max-w-full max-h-[460px] block pointer-events-none" />
+          <>
+            <img src={preview} className="max-w-full max-h-[460px] block pointer-events-none" />
+            <button
+              type="button"
+              onClick={clear}
+              aria-label="Remove image"
+              className="absolute top-3 right-3 z-20 w-8 h-8 rounded-full bg-black/65 hover:bg-red text-white flex items-center justify-center shadow-soft transition-colors"
+            >
+              <X className="w-4 h-4" strokeWidth={2.5} />
+            </button>
+          </>
         ) : (
           <div className="text-center px-5 pointer-events-none">
             <div className="font-semibold text-[15px] mb-2">{hint}</div>

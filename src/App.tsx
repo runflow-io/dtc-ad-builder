@@ -68,6 +68,15 @@ export default function App() {
     setShowAdvanced(false);
   };
 
+  // Auto-strip lifestyle_scenes from operations when the user removes the
+  // reference image — keeps the selection in a valid state without surprising
+  // the user with a downstream "generate disabled" error.
+  useEffect(() => {
+    if (!reference && operations.includes("lifestyle_scenes")) {
+      setOperations((prev) => prev.filter((o) => o !== "lifestyle_scenes"));
+    }
+  }, [reference, operations]);
+
   const [steps, setSteps] = useState<Steps>(INITIAL_STEPS);
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
   const [assets, setAssets] = useState<AssetFile[]>([]);
@@ -111,12 +120,15 @@ export default function App() {
   }, []);
 
   const keysOk = !!(keys.runflow && keys.openai);
-  const ready = keysOk && !!source && operations.length > 0 && !running;
+  const lifestyleWithoutRef = operations.includes("lifestyle_scenes") && !reference;
+  const ready =
+    keysOk && !!source && operations.length > 0 && !running && !lifestyleWithoutRef;
 
   const ctaHint = useMemo(() => {
     if (!keysOk) return "Add API keys in settings to enable";
     if (!source) return "Drop a supplier image to enable";
     if (operations.length === 0) return "Pick at least one operation to enable";
+    if (lifestyleWithoutRef) return "Lifestyle scenes need a reference style image — drop one in slot 2";
     if (running) return "Generating…";
     const ratios = uniqueRatios(platforms).filter((r) => r !== "1:1");
     const sceneCount =
@@ -129,7 +141,7 @@ export default function App() {
       (operations.includes("remove_object") ? 1 : 0);
     const total = baseCount + ratioCount;
     return `Ready · ${total} asset${total === 1 ? "" : "s"} · ~${30 + (sceneCount + ratioCount) * 15}s`;
-  }, [keysOk, source, running, operations, platforms]);
+  }, [keysOk, source, running, operations, platforms, lifestyleWithoutRef]);
 
   // Each consumer (Pipeline, ResultGrid, PackDetail) builds its OWN ordered
   // list of LightboxItems and hands it to onZoom. This decouples the lightbox
@@ -320,7 +332,11 @@ export default function App() {
                   </div>
                 </div>
               </div>
-              <PresetPicker selected={currentPreset} onChange={onPresetChange} />
+              <PresetPicker
+                selected={currentPreset}
+                hasReference={!!reference}
+                onChange={onPresetChange}
+              />
 
               <div className="mt-3">
                 <button
@@ -332,7 +348,11 @@ export default function App() {
                 </button>
                 {showAdvanced ? (
                   <div className="mt-3">
-                    <OperationPicker selected={operations} onChange={setOperations} />
+                    <OperationPicker
+                      selected={operations}
+                      hasReference={!!reference}
+                      onChange={setOperations}
+                    />
                   </div>
                 ) : null}
               </div>
