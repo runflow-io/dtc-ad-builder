@@ -1,4 +1,15 @@
-import { X, ExternalLink, Github, Settings as SettingsIcon, ArrowRight } from "lucide-react";
+import { useState } from "react";
+import {
+  X,
+  ExternalLink,
+  Github,
+  Settings as SettingsIcon,
+  ArrowRight,
+  Lock,
+  Database,
+  Copy,
+  Check,
+} from "lucide-react";
 
 type Props = {
   open: boolean;
@@ -6,7 +17,36 @@ type Props = {
   onOpenSettings: () => void;
 };
 
+const PROMPT_SECRETS = `Move the Runflow + OpenAI API keys from the browser SettingsModal to Replit Secrets so they never live in the client bundle.
+
+1. Add a small Express (or Vite middleware) server route that proxies /api/runflow/* and /api/openai/* — read RUNFLOW_API_KEY and OPENAI_API_KEY from process.env (set as Replit Secrets, NOT VITE_-prefixed so they stay server-only).
+2. The server adds the Authorization: Bearer <key> header before forwarding to api.runflow.io or api.openai.com. The browser never sees the keys.
+3. Delete src/lib/keys.ts and src/components/SettingsModal.tsx. Remove key-related state from App.tsx.
+4. Update the Header KEYS badge to ping /api/health which returns { runflow: true|false, openai: true|false } based on whether the env vars are set.
+
+This is the production setup — keys in Replit Secrets, browser is dumb.`;
+
+const PROMPT_DB = `Replace the IndexedDB brand-pack storage with Replit's Postgres database + object storage so packs persist across users and devices.
+
+1. Create a Postgres table: packs (id uuid pk, created_at timestamp, product text, category text, analysis jsonb).
+2. Store asset blobs in Replit Object Storage (or Postgres bytea if small) — one entry per asset, foreign-keyed to the pack id.
+3. Add /api/packs endpoints: GET (list, newest first), GET /:id (one pack with all assets), POST (create a new pack), DELETE /:id.
+4. Rewrite src/lib/history.ts to call these endpoints instead of IndexedDB. Keep the same exported function signatures (savePack, listPacks, deletePack) so the rest of the app doesn't change.
+5. The RecentPacks UI should keep working unchanged — it just fetches from the API now.`;
+
 export function HowToStartModal({ open, onClose, onOpenSettings }: Props) {
+  const [copied, setCopied] = useState<string | null>(null);
+
+  const copy = async (key: string, text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(key);
+      setTimeout(() => setCopied(null), 2000);
+    } catch {
+      // silent — older browsers / iframes without clipboard permission
+    }
+  };
+
   if (!open) return null;
 
   return (
@@ -120,6 +160,57 @@ npm run dev`}
             </p>
           </Step>
 
+          {/* STEP 4 — production hardening */}
+          <div className="border-t border-line pt-6">
+            <div className="flex gap-4">
+              <div className="flex-shrink-0">
+                <div className="w-7 h-7 rounded-full bg-panel-2 border border-line text-muted font-mono font-bold text-xs flex items-center justify-center">
+                  4
+                </div>
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-2">
+                  <h3 className="text-sm font-semibold text-ink">Going further (optional)</h3>
+                  <span className="font-mono uppercase tracking-wider text-[9px] px-1.5 py-[3px] rounded text-amber bg-amber-soft border border-amber-border font-bold">
+                    PRODUCTION
+                  </span>
+                </div>
+                <p className="text-sm text-ink-2 leading-relaxed mb-4">
+                  The localStorage + IndexedDB setup is perfect for personal use. If you're
+                  shipping this publicly, you'll want keys in Replit Secrets (not the browser)
+                  and brand packs in a real database. Paste these into Replit AI and it'll
+                  do the work for you.
+                </p>
+
+                <PromptCard
+                  icon={<Lock className="w-3.5 h-3.5" />}
+                  title="Move keys to Replit Secrets"
+                  sub="Hide API keys server-side · ~3-step refactor"
+                  copyKey="secrets"
+                  prompt={PROMPT_SECRETS}
+                  copiedKey={copied}
+                  onCopy={copy}
+                />
+                <div className="h-2.5" />
+                <PromptCard
+                  icon={<Database className="w-3.5 h-3.5" />}
+                  title="Persist brand packs in a database"
+                  sub="Replit Postgres + object storage · per-pack persistence"
+                  copyKey="db"
+                  prompt={PROMPT_DB}
+                  copiedKey={copied}
+                  onCopy={copy}
+                />
+
+                <p className="text-[11px] text-muted mt-3 leading-relaxed">
+                  Both prompts assume you're running this in a Replit project. Open the
+                  Replit AI chat, paste, and watch it edit the files. You can also drop them
+                  into Cursor or Claude Code if you're hosting elsewhere.
+                </p>
+              </div>
+            </div>
+          </div>
+
         </div>
 
         <div className="border-t border-line p-4 flex items-center justify-between gap-3 bg-panel-2/40">
@@ -197,5 +288,59 @@ function KeyCard({
       <div className="text-[11px] text-muted leading-snug">{purpose}</div>
       <div className="text-[11px] text-ink-2 mt-1 font-mono">{cost}</div>
     </a>
+  );
+}
+
+function PromptCard({
+  icon,
+  title,
+  sub,
+  copyKey,
+  prompt,
+  copiedKey,
+  onCopy,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  sub: string;
+  copyKey: string;
+  prompt: string;
+  copiedKey: string | null;
+  onCopy: (key: string, text: string) => void;
+}) {
+  const isCopied = copiedKey === copyKey;
+  return (
+    <details className="bg-panel border border-line rounded-lg overflow-hidden group">
+      <summary className="flex items-center gap-3 p-3 cursor-pointer hover:bg-panel-2/50 list-none">
+        <div className="flex-shrink-0 w-7 h-7 rounded-md bg-panel-2 text-ink-2 flex items-center justify-center">
+          {icon}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="text-sm font-semibold text-ink">{title}</div>
+          <div className="text-[11px] text-muted leading-snug">{sub}</div>
+        </div>
+        <span className="text-xs text-amber font-semibold opacity-60 group-open:hidden">Show prompt</span>
+        <span className="text-xs text-amber font-semibold opacity-60 hidden group-open:inline">Hide</span>
+      </summary>
+      <div className="border-t border-line bg-panel-2/30 p-3">
+        <div className="relative">
+          <pre className="text-[11px] font-mono text-ink-2 whitespace-pre-wrap leading-relaxed bg-panel border border-line rounded-md p-3 pr-20 max-h-[260px] overflow-y-auto">
+{prompt}
+          </pre>
+          <button
+            onClick={(e) => { e.preventDefault(); onCopy(copyKey, prompt); }}
+            className={
+              "absolute top-2 right-2 inline-flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-semibold rounded-md transition-colors " +
+              (isCopied
+                ? "bg-green text-white"
+                : "bg-ink hover:bg-amber text-white")
+            }
+          >
+            {isCopied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+            {isCopied ? "Copied" : "Copy"}
+          </button>
+        </div>
+      </div>
+    </details>
   );
 }
