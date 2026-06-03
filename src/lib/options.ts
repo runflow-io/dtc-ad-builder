@@ -130,42 +130,48 @@ export type WorkflowMeta = {
   external?: boolean;
 };
 
+// Runflow's public Solutions catalog uses the URL pattern
+//   https://www.runflow.io/api/<solution-name>
+// (NOT /models/{provider}/{slug} — that's the internal API path which returns 404
+// on the public site for OpenAI-backed solutions.)
 export const WORKFLOW_META: Record<string, WorkflowMeta> = {
   "runflow/product-isolation": {
     label: "Product Isolation",
-    url: "https://www.runflow.io/models/runflow/product-isolation",
+    url: "https://www.runflow.io/api/product-isolation",
   },
   "runflow/object-removal/prompt": {
     label: "Object Removal (Prompt)",
-    url: "https://www.runflow.io/models/runflow/object-removal/prompt",
+    url: "https://www.runflow.io/api/object-removal",
   },
   "runflow/object-removal": {
     label: "Object Removal",
-    url: "https://www.runflow.io/models/runflow/object-removal",
+    url: "https://www.runflow.io/api/object-removal",
   },
   "runflow/smart-resize": {
     label: "Smart Resize",
-    url: "https://www.runflow.io/models/runflow/smart-resize",
+    url: "https://www.runflow.io/api/smart-resize",
   },
   "runflow/smart-segmentation": {
     label: "Smart Segmentation",
-    url: "https://www.runflow.io/models/runflow/smart-segmentation",
+    url: "https://www.runflow.io/api/background-separation",
   },
   "runflow/outpaint/aspect-ratio": {
     label: "Outpaint (Aspect Ratio)",
-    url: "https://www.runflow.io/models/runflow/outpaint/aspect-ratio",
+    url: "https://www.runflow.io/api/outpainting",
   },
   "runflow/model-removal": {
     label: "Model Removal",
-    url: "https://www.runflow.io/models/runflow/model-removal",
+    url: "https://www.runflow.io/api/on-model-removal",
   },
   "runflow/background-replace": {
     label: "Background Replace",
-    url: "https://www.runflow.io/models/runflow/background-replace",
+    url: "https://www.runflow.io/api/replace-background",
   },
+  // OpenAI-backed solutions don't have dedicated public pages on runflow.io,
+  // so we point at the closest match in the Solutions catalog.
   "openai/gpt-image-2/edit": {
     label: "GPT Image 2 — Edit",
-    url: "https://www.runflow.io/models/openai/gpt-image-2/edit",
+    url: "https://www.runflow.io/api/prompt-based-image-editing",
   },
   "openai/gpt-4o": {
     label: "GPT-4o (vision)",
@@ -177,8 +183,9 @@ export const WORKFLOW_META: Record<string, WorkflowMeta> = {
 export function workflowMeta(slug: string): WorkflowMeta {
   return (
     WORKFLOW_META[slug] || {
+      // Best-effort fallback: take the last segment as the slug for /api/<slug>
       label: slug,
-      url: `https://www.runflow.io/models/${slug}`,
+      url: `https://www.runflow.io/api/${slug.split("/").pop()}`,
     }
   );
 }

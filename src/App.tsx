@@ -95,6 +95,9 @@ export default function App() {
   const [openedPack, setOpenedPack] = useState<RecentPack | null>(null);
   const [workflowsUsed, setWorkflowsUsed] = useState<string[]>([]);
   const [packsCount, setPacksCount] = useState(0);
+  // The pack that was just generated and is waiting to be viewed (consumed
+  // when the user clicks the 'View your pack' CTA or starts a new pack).
+  const [latestPack, setLatestPack] = useState<RecentPack | null>(null);
 
   // count of packs (for tab badge) — refreshed whenever recentTick bumps
   useEffect(() => {
@@ -172,6 +175,7 @@ export default function App() {
     setSource(null);
     setReference(null);
     setOpenedPack(null);
+    setLatestPack(null);
     setTab("generate");
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -242,6 +246,7 @@ export default function App() {
           workflows: result.workflows || workflowAcc,
         };
         await savePack(pack);
+        setLatestPack(pack);
         setRecentTick((t) => t + 1);
       }
     } catch (err: any) {
@@ -291,7 +296,13 @@ export default function App() {
         </h1>
       </section>
 
-      <Tabs active={tab} onChange={setTab} processing={running} packsCount={packsCount} />
+      <Tabs
+        active={tab}
+        onChange={setTab}
+        processing={running}
+        packReady={!!latestPack}
+        packsCount={packsCount}
+      />
 
       {/* === TAB 1 — GENERATE === */}
       {tab === "generate" ? (
@@ -392,55 +403,95 @@ export default function App() {
       {/* === TAB 2 — PROCESSING === */}
       {tab === "processing" ? (
         <section className="mb-10">
-          <div className="mb-5">
-            <h2 className="text-lg font-semibold mb-1">
-              {running ? "Building your pack…" : error ? "Pipeline failed" : "Pack ready"}
-            </h2>
-            <p className="text-xs text-muted">
-              {running
-                ? "Hold tight — this tab updates live as each step finishes."
-                : error
-                ? "Something went wrong mid-run. Details below."
-                : "All assets generated. Download below or jump to your collection."}
-            </p>
-          </div>
-
-          {jobId ? (
-            <Pipeline steps={steps} analysis={analysis} assetUrls={assetUrls} onZoom={onZoom} />
-          ) : null}
-
-          {error ? (
-            <section className="mb-10 bg-red-soft border border-red/30 rounded-[10px] p-5">
-              <h2 className="text-red font-semibold mb-2">Pipeline failed</h2>
-              <pre className="font-mono text-xs text-red whitespace-pre-wrap m-0">{error}</pre>
-            </section>
-          ) : null}
-
-          {!running && assets.length > 0 ? (
+          {running ? (
+            // ---- Running state: live pipeline ----
             <>
-              <ResultGrid
-                assets={assets}
-                assetUrls={assetUrls}
-                zipUrl={zipUrl}
-                jobId={jobId}
-                onZoom={onZoom}
-              />
-              <div className="flex gap-3 mt-2">
-                <button
-                  onClick={() => setTab("packs")}
-                  className="inline-flex items-center gap-2 px-4 py-2.5 bg-ink hover:bg-amber text-white text-sm font-semibold rounded-md transition-colors shadow-soft"
-                >
-                  View in Packs collection →
-                </button>
+              <div className="mb-5">
+                <h2 className="text-lg font-semibold mb-1">Building your pack…</h2>
+                <p className="text-xs text-muted">
+                  Hold tight — this tab updates live as each step finishes.
+                </p>
+              </div>
+              {jobId ? (
+                <Pipeline steps={steps} analysis={analysis} assetUrls={assetUrls} onZoom={onZoom} />
+              ) : null}
+            </>
+          ) : error ? (
+            // ---- Error state ----
+            <>
+              <div className="mb-5">
+                <h2 className="text-lg font-semibold mb-1 text-red">Pipeline failed</h2>
+                <p className="text-xs text-muted">
+                  Something went wrong mid-run. Details below.
+                </p>
+              </div>
+              {jobId ? (
+                <Pipeline steps={steps} analysis={analysis} assetUrls={assetUrls} onZoom={onZoom} />
+              ) : null}
+              <section className="mt-7 bg-red-soft border border-red/30 rounded-[10px] p-5">
+                <pre className="font-mono text-xs text-red whitespace-pre-wrap m-0">{error}</pre>
+              </section>
+              <div className="mt-5">
                 <button
                   onClick={onNewPack}
-                  className="inline-flex items-center gap-2 px-4 py-2.5 text-ink-2 hover:bg-panel-2 text-sm font-semibold rounded-md transition-colors"
+                  className="inline-flex items-center gap-2 px-5 py-2.5 bg-ink hover:bg-amber text-white text-sm font-semibold rounded-md transition-colors shadow-soft"
                 >
-                  Generate another
+                  + Create a new pack
                 </button>
               </div>
             </>
-          ) : null}
+          ) : latestPack ? (
+            // ---- Just completed: single CTA to view the pack ----
+            <div className="bg-panel border border-line rounded-2xl p-10 text-center">
+              <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-green-soft text-green mb-4">
+                <svg className="w-7 h-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+              </div>
+              <div className="font-mono uppercase tracking-widest text-[11px] text-amber font-bold mb-2">
+                Pack ready
+              </div>
+              <h2 className="text-2xl font-bold mb-2">{latestPack.product}</h2>
+              <p className="text-sm text-muted leading-relaxed max-w-md mx-auto mb-6">
+                {latestPack.assets.length} asset{latestPack.assets.length === 1 ? "" : "s"} generated and saved to your collection.
+              </p>
+              <button
+                onClick={() => {
+                  setOpenedPack(latestPack);
+                  setLatestPack(null);
+                  // free the active-pipeline state since the user moved past it
+                  resetForNew();
+                  setTab("packs");
+                  window.scrollTo({ top: 0, behavior: "smooth" });
+                }}
+                className="inline-flex items-center gap-2 px-6 py-3 bg-ink hover:bg-amber text-white text-sm font-semibold rounded-md transition-colors shadow-soft"
+              >
+                Open your pack →
+              </button>
+            </div>
+          ) : (
+            // ---- Idle / consumed: no active process ----
+            <div className="bg-panel border border-line rounded-2xl py-16 px-6 text-center">
+              <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-panel-2 text-muted mb-3">
+                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <line x1="12" y1="8" x2="12" y2="12"></line>
+                  <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                </svg>
+              </div>
+              <h3 className="text-base font-semibold mb-1.5">No active process</h3>
+              <p className="text-sm text-muted leading-relaxed max-w-md mx-auto mb-5">
+                Nothing is running right now. Start a new pack to use this tab.
+                Past packs live in your collection.
+              </p>
+              <button
+                onClick={onNewPack}
+                className="inline-flex items-center gap-1.5 px-5 py-2.5 bg-ink hover:bg-amber text-white text-sm font-semibold rounded-md transition-colors shadow-soft"
+              >
+                + Create a new pack
+              </button>
+            </div>
+          )}
         </section>
       ) : null}
 
@@ -449,7 +500,12 @@ export default function App() {
         openedPack ? (
           <PackDetail pack={openedPack} onClose={onClosePackDetail} onZoom={onZoom} />
         ) : (
-          <PacksGallery refreshKey={recentTick} onOpen={onOpenRecent} onNew={onNewPack} />
+          <PacksGallery
+            refreshKey={recentTick}
+            onOpen={onOpenRecent}
+            onNew={onNewPack}
+            onAfterDelete={() => setRecentTick((t) => t + 1)}
+          />
         )
       ) : null}
 

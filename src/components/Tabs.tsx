@@ -6,6 +6,7 @@ type Props = {
   active: Tab;
   onChange: (t: Tab) => void;
   processing: boolean;   // is a pipeline currently running?
+  packReady: boolean;    // is a pack ready to view (just completed)?
   packsCount: number;
 };
 
@@ -15,37 +16,30 @@ const TABS: { key: Tab; label: string; icon: any }[] = [
   { key: "packs", label: "Packs collection", icon: Library },
 ];
 
-export function Tabs({ active, onChange, processing, packsCount }: Props) {
+export function Tabs({ active, onChange, processing, packReady, packsCount }: Props) {
   return (
     <div className="border-b border-line mb-7">
       <div className="flex gap-1 -mb-px">
         {TABS.map((t, i) => {
           const isActive = t.key === active;
-          const disabled = t.key === "processing" && !processing;
           const Icon = t.icon;
+          const showPing = t.key === "processing" && packReady && !processing && !isActive;
           return (
             <button
               key={t.key}
               type="button"
-              disabled={disabled}
-              onClick={() => !disabled && onChange(t.key)}
+              onClick={() => onChange(t.key)}
               className={
                 "relative flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 transition-all -mb-[1px] " +
                 (isActive
                   ? "border-amber text-amber"
-                  : disabled
-                  ? "border-transparent text-faint cursor-not-allowed"
                   : "border-transparent text-ink-2 hover:text-ink hover:border-line")
               }
             >
               <span
                 className={
                   "flex-shrink-0 w-5 h-5 rounded-full font-mono font-bold text-[11px] flex items-center justify-center " +
-                  (isActive
-                    ? "bg-amber text-white"
-                    : disabled
-                    ? "bg-panel-2 text-faint"
-                    : "bg-panel-2 text-muted")
+                  (isActive ? "bg-amber text-white" : "bg-panel-2 text-muted")
                 }
               >
                 {i + 1}
@@ -59,6 +53,9 @@ export function Tabs({ active, onChange, processing, packsCount }: Props) {
               {t.label}
               {t.key === "packs" && packsCount > 0 ? (
                 <span className="ml-1 text-[11px] font-mono text-muted">({packsCount})</span>
+              ) : null}
+              {showPing ? (
+                <span className="absolute -top-0.5 right-2 w-2 h-2 rounded-full bg-amber animate-pulse" />
               ) : null}
             </button>
           );
