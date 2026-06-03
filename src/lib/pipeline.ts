@@ -48,7 +48,7 @@ export type Analysis = {
 export type PipelineUpdate =
   | { type: "step"; key: StepKey; status: StepStatus; message?: string }
   | { type: "analysis"; analysis: Analysis }
-  | { type: "asset"; key: string; blob: Blob; filename: string }
+  | { type: "asset"; key: string; label: string; blob: Blob; filename: string }
   | { type: "workflow"; slug: string };
 
 export type ProgressFn = (u: PipelineUpdate) => void;
@@ -235,7 +235,7 @@ export async function runPipeline(input: PipelineInput, onProgress: ProgressFn):
 
   const pushAsset = (a: AssetFile) => {
     assets.push(a);
-    onProgress({ type: "asset", key: a.key, blob: a.blob, filename: a.filename });
+    onProgress({ type: "asset", key: a.key, label: a.label, blob: a.blob, filename: a.filename });
   };
 
   const trackWorkflow = (slug: string) => {

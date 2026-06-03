@@ -1,6 +1,7 @@
 import { ArrowLeft, ExternalLink, Download, Info } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { workflowMeta } from "../lib/options";
+import { groupAssets } from "../lib/categories";
 import type { RecentPack } from "../lib/history";
 import { buildZip } from "../lib/zip";
 import type { LightboxItem } from "./Lightbox";
@@ -143,39 +144,60 @@ export function PackDetail({ pack, onClose, onZoom }: Props) {
         )}
       </div>
 
-      {/* asset grid */}
-      <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-4 mb-10">
-        {pack.assets.map((a) => {
-          const url = assetUrls[a.key];
-          if (!url) return null;
-          return (
-            <figure
-              key={a.key}
-              className="bg-panel border border-line rounded-[10px] overflow-hidden flex flex-col hover:border-amber-border hover:shadow-soft transition-all"
-            >
-              <button
-                onClick={() => handleZoom(url)}
-                className={
-                  "aspect-square flex items-center justify-center overflow-hidden cursor-zoom-in " +
-                  (a.key === "cutout" ? "checker" : "bg-panel-2")
-                }
-              >
-                <img src={url} loading="lazy" className="max-w-full max-h-full object-contain" />
-              </button>
-              <figcaption className="p-3 flex flex-col gap-2">
-                <div className="text-xs font-semibold leading-snug">{a.label}</div>
-                <a
-                  href={url}
-                  download={`runflow-pack-${pack.id}-${a.filename}`}
-                  className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber hover:underline"
-                >
-                  <Download className="w-3 h-3" />
-                  Download
-                </a>
-              </figcaption>
-            </figure>
-          );
-        })}
+      {/* grouped asset sections */}
+      <div className="space-y-8 mb-10">
+        {groupAssets(pack.assets).map((section) => (
+          <div key={section.folder}>
+            <div className="flex items-baseline justify-between mb-3">
+              <div>
+                <h3 className="text-sm font-semibold text-ink">{section.title}</h3>
+                <div className="text-[11px] text-muted mt-0.5">{section.hint}</div>
+              </div>
+              <span className="font-mono text-[10px] text-muted">
+                {section.items.length} file{section.items.length === 1 ? "" : "s"}
+              </span>
+            </div>
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-3">
+              {section.items.map((a) => {
+                const url = assetUrls[a.key];
+                if (!url) return null;
+                return (
+                  <figure
+                    key={a.key}
+                    className="bg-panel border border-line rounded-[10px] overflow-hidden flex flex-col hover:border-amber-border hover:shadow-soft transition-all"
+                  >
+                    <button
+                      onClick={() => handleZoom(url)}
+                      className={
+                        "aspect-square flex items-center justify-center overflow-hidden cursor-zoom-in " +
+                        (a.key === "cutout" ? "checker" : "bg-panel-2")
+                      }
+                    >
+                      <img
+                        src={url}
+                        loading="lazy"
+                        className="max-w-full max-h-full object-contain"
+                      />
+                    </button>
+                    <figcaption className="p-3 flex flex-col gap-1.5">
+                      <div className="text-xs font-semibold leading-snug">
+                        {a.label || a.key}
+                      </div>
+                      <a
+                        href={url}
+                        download={`runflow-pack-${pack.id}-${a.filename}`}
+                        className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber hover:underline"
+                      >
+                        <Download className="w-3 h-3" />
+                        Download
+                      </a>
+                    </figcaption>
+                  </figure>
+                );
+              })}
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );

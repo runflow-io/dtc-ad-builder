@@ -5,6 +5,7 @@ import { HowToStartModal } from "./components/HowToStartModal";
 import { Dropzone } from "./components/Dropzone";
 import { OperationPicker } from "./components/OperationPicker";
 import { PlatformPicker } from "./components/PlatformPicker";
+import { PresetPicker, detectPreset, type PresetKey } from "./components/PresetPicker";
 import { Pipeline } from "./components/Pipeline";
 import { ResultGrid } from "./components/ResultGrid";
 import { HowItWorks } from "./components/HowItWorks";
@@ -52,6 +53,20 @@ export default function App() {
     "tiktok",
     "instagram_feed",
   ]);
+  const [showAdvanced, setShowAdvanced] = useState(false);
+
+  // derive which preset matches the current operations
+  const currentPreset: PresetKey = detectPreset(operations);
+
+  const onPresetChange = (key: PresetKey, ops: Operation[]) => {
+    if (key === "custom") {
+      setShowAdvanced(true);
+      // keep current ops, just reveal advanced
+      return;
+    }
+    setOperations(ops);
+    setShowAdvanced(false);
+  };
 
   const [steps, setSteps] = useState<Steps>(INITIAL_STEPS);
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
@@ -177,8 +192,8 @@ export default function App() {
           } else if (u.type === "analysis") {
             setAnalysis(u.analysis);
           } else if (u.type === "asset") {
-            // labels come from the pipeline itself now (dynamic per selection)
-            collected.push({ key: u.key, blob: u.blob, filename: u.filename, label: "" });
+            // labels come from the pipeline (dynamic per selection)
+            collected.push({ key: u.key, label: u.label, blob: u.blob, filename: u.filename });
             const blobUrl = URL.createObjectURL(u.blob);
             setAssetUrls((prev) => ({ ...prev, [u.key]: blobUrl }));
           } else if (u.type === "workflow") {
@@ -297,14 +312,30 @@ export default function App() {
                     3 · What to do
                   </div>
                   <div className="text-[12px] text-ink-2">
-                    Pick one or more. Mask-based ops auto-detect their region via{" "}
+                    Pick a preset that fits your input — or expand Advanced to mix
+                    operations. Mask-based ops auto-detect their region via{" "}
                     <code className="bg-panel-2 px-1.5 py-0.5 rounded font-mono text-[10px] text-amber">
                       runflow/smart-segmentation
-                    </code>{" "}— no manual masking.
+                    </code>.
                   </div>
                 </div>
               </div>
-              <OperationPicker selected={operations} onChange={setOperations} />
+              <PresetPicker selected={currentPreset} onChange={onPresetChange} />
+
+              <div className="mt-3">
+                <button
+                  type="button"
+                  onClick={() => setShowAdvanced((v) => !v)}
+                  className="text-xs text-amber font-semibold hover:underline"
+                >
+                  {showAdvanced ? "Hide advanced" : "Show advanced — pick individual operations"}
+                </button>
+                {showAdvanced ? (
+                  <div className="mt-3">
+                    <OperationPicker selected={operations} onChange={setOperations} />
+                  </div>
+                ) : null}
+              </div>
             </div>
 
             <div>
