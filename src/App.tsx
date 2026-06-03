@@ -239,7 +239,7 @@ export default function App() {
 
       <section className="mb-9">
         <div className="font-mono uppercase tracking-widest text-[11px] text-amber font-bold mb-2.5">
-          Lovable template · v0.1
+          Runflow template · v0.1
         </div>
         <h1 className="font-bold text-[36px] leading-[1.1] tracking-tight mb-2.5">
           Turn one supplier photo into a store-ready brand pack.
@@ -298,7 +298,7 @@ export default function App() {
       <ResultGrid assets={assets} assetUrls={assetUrls} zipUrl={zipUrl} jobId={jobId} onZoom={onZoom} />
 
       <footer className="text-muted text-xs border-t border-line pt-5 mt-16">
-        DropVentures · Lovable template · forks live in your browser only — no servers, no DB,
+        Runflow · Replit template · forks live in your browser only — no servers, no DB,
         keys stored in localStorage. Pay-as-you-go via your own{" "}
         <a href="https://app.runflow.io" target="_blank" rel="noreferrer" className="text-amber hover:underline">Runflow</a>{" "}
         and{" "}

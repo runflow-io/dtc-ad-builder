@@ -14,7 +14,7 @@ export function Header({ keysOk, onOpenSettings }: Props) {
           style={{ background: "linear-gradient(90deg, #1a1a1a 0%, #d97706 100%)" }}
         />
         <div className="font-bold text-lg tracking-tight">
-          Drop<span className="text-amber">Ventures</span>
+          Run<span className="text-amber">flow</span>
         </div>
       </div>
       <div className="flex items-center gap-2">

@@ -1,4 +1,4 @@
-// DropVentures brand-pack pipeline.
+// Runflow brand-pack pipeline.
 // One supplier image (and optionally a reference style image) → 7-asset pack.
 //
 // Steps:

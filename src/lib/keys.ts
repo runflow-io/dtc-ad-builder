@@ -6,7 +6,7 @@ export type Keys = {
   openai: string;
 };
 
-const STORAGE_KEY = "dropventures.keys";
+const STORAGE_KEY = "runflow.dtc.keys";
 
 export function loadKeys(): Keys {
   if (typeof window === "undefined") return { runflow: "", openai: "" };

@@ -120,7 +120,7 @@ export async function runSolution(
     method: "POST",
     body: JSON.stringify({
       input,
-      client_ref: clientRef || `dropventures-${Date.now()}`,
+      client_ref: clientRef || `runflow-dtc-${Date.now()}`,
     }),
   });
   const runId: string = start.id || start.run_id;
@@ -170,8 +170,14 @@ export function firstUrl(run: { output?: any }): string | null {
 
 // ---------- download a remote image as a Blob (for ZIPing locally) ----------
 
+// We route CDN URLs through the asset-proxy middleware to avoid CORS rejection
+// on Runflow's image CDN domains. Vite middleware fetches the URL server-side
+// and streams it back same-origin.
 export async function downloadBlob(url: string): Promise<Blob> {
-  const res = await fetch(url);
-  if (!res.ok) throw new RunflowError(`download ${url} -> ${res.status}`, res.status);
+  const proxied = `/api/asset-proxy?url=${encodeURIComponent(url)}`;
+  const res = await fetch(proxied);
+  if (!res.ok) {
+    throw new RunflowError(`asset-proxy ${url} -> ${res.status}`, res.status);
+  }
   return res.blob();
 }

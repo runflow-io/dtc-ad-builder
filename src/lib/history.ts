@@ -3,7 +3,7 @@
 
 import type { Analysis, AssetFile } from "./pipeline";
 
-const DB_NAME = "dropventures";
+const DB_NAME = "runflow.dtc";
 const STORE = "packs";
 const VERSION = 1;
 

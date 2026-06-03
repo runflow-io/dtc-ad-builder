@@ -1,20 +1,50 @@
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 
-// Runflow's Solutions API (/v1/models/{slug}/runs) does not return CORS
-// headers, so the browser can't call it directly. The Vite dev server
-// proxies /api/runflow/* → https://api.runflow.io/v1/* server-side, which
-// sidesteps CORS entirely — the browser only ever talks to localhost.
+// Runflow's API doesn't return CORS headers, so the browser can't call it
+// directly. Vite proxies two things server-side:
+//   /api/runflow/*       → https://api.runflow.io/v1/*
+//   /api/asset-proxy?url → arbitrary CDN URL (used to download generated
+//                          images into the browser for display + ZIPing)
 //
-// Works the same on Replit (Vite runs there too) and any other dev host.
+// Both work identically on localhost and Replit.
+
+// Generic asset-proxy plugin: GET /api/asset-proxy?url=<encoded url>
+// fetches the URL server-side and streams it back to the browser, side-
+// stepping browser CORS on the destination.
+function assetProxyPlugin(): Plugin {
+  return {
+    name: "dtc-ad-builder-asset-proxy",
+    configureServer(server) {
+      server.middlewares.use("/api/asset-proxy", async (req, res) => {
+        try {
+          const url = new URL(req.url || "/", "http://x").searchParams.get("url");
+          if (!url || !/^https?:\/\//.test(url)) {
+            res.statusCode = 400;
+            res.end("bad url");
+            return;
+          }
+          const upstream = await fetch(url);
+          res.statusCode = upstream.status;
+          const ct = upstream.headers.get("content-type");
+          if (ct) res.setHeader("content-type", ct);
+          const buf = Buffer.from(await upstream.arrayBuffer());
+          res.end(buf);
+        } catch (e) {
+          res.statusCode = 502;
+          res.end(`asset-proxy error: ${(e as Error).message}`);
+        }
+      });
+    },
+  };
+}
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), assetProxyPlugin()],
   server: {
     // host: true binds 0.0.0.0 so Replit / Codespaces / Docker can proxy the dev server.
     host: true,
     port: 5173,
-    // allow *.replit.dev preview origins
     allowedHosts: true,
     proxy: {
       "/api/runflow": {

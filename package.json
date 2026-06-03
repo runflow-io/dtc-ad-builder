@@ -1,9 +1,9 @@
 {
-  "name": "dropventures-template",
+  "name": "runflow-dtc-ad-builder",
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "Turn one supplier photo into a 7-asset store-ready brand pack. Powered by Runflow.",
+  "description": "Runflow template: turn one supplier photo into a 7-asset store-ready brand pack in ~90 seconds. Replit-friendly.",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",

@@ -18,7 +18,7 @@ export function ResultGrid({ assets, assetUrls, zipUrl, jobId, onZoom }: Props) 
         {zipUrl ? (
           <a
             href={zipUrl}
-            download={`dropventures-${jobId}.zip`}
+            download={`runflow-pack-${jobId}.zip`}
             className="inline-flex items-center gap-1.5 px-5 py-2.5 bg-ink hover:bg-amber text-white text-sm font-semibold rounded-md transition-colors shadow-soft"
           >
             Download all (zip) →
@@ -35,7 +35,7 @@ export function ResultGrid({ assets, assetUrls, zipUrl, jobId, onZoom }: Props) 
               className="bg-panel border border-line rounded-[10px] overflow-hidden flex flex-col hover:border-amber-border hover:shadow-soft transition-all"
             >
               <button
-                onClick={() => onZoom(url, a.label, `dropventures-${jobId}-${a.filename}`)}
+                onClick={() => onZoom(url, a.label, `runflow-pack-${jobId}-${a.filename}`)}
                 className={"aspect-square flex items-center justify-center overflow-hidden cursor-zoom-in " + (a.key === "cutout" ? "checker" : "bg-panel-2")}
               >
                 <img src={url} loading="lazy" className="max-w-full max-h-full object-contain" />
@@ -44,7 +44,7 @@ export function ResultGrid({ assets, assetUrls, zipUrl, jobId, onZoom }: Props) 
                 <div className="text-xs font-semibold leading-snug">{a.label}</div>
                 <a
                   href={url}
-                  download={`dropventures-${jobId}-${a.filename}`}
+                  download={`runflow-pack-${jobId}-${a.filename}`}
                   className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber hover:underline"
                 >
                   <Download className="w-3 h-3" />

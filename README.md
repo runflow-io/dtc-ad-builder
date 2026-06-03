@@ -1,10 +1,11 @@
-# DropVentures · DTC Ad Builder
+# Runflow · DTC Ad Builder
 
 Drop one supplier photo, get a **7-asset store-ready brand pack** in ~90 seconds. Cutout, white-background studio, 3 lifestyle scenes (AI-picked per product), 9:16 hero, 1:1 ad creative. Optionally match the visual style of a reference ad you like.
 
 **Built for dropshippers, Amazon FBA sellers, Shopify owners, and small DTC brands rebranding supplier (AliExpress / 1688 / Alibaba) photos at scale.**
 
-100% browser. No backend. No database. Fork it, drop in your two API keys, ship. Powered by [Runflow](https://www.runflow.io) (image pipeline) + [OpenAI](https://platform.openai.com) (gpt-4o vision).
+Frontend only. No database. Fork it, drop in your two API keys, ship.
+Powered by [Runflow](https://www.runflow.io) (image pipeline) + [OpenAI](https://platform.openai.com) (gpt-4o vision).
 
 [![Open in Replit](https://replit.com/badge/github/runflow-io/dtc-ad-builder)](https://replit.com/github/runflow-io/dtc-ad-builder)
 
@@ -12,7 +13,7 @@ Drop one supplier photo, get a **7-asset store-ready brand pack** in ~90 seconds
 
 ### Option A — Open in Replit (no install)
 
-Click the badge above. Replit clones the repo, runs `npm install`, and serves the app at a public preview URL. Open Settings, paste your Runflow + OpenAI keys, drop an image. ~2 minutes to first brand pack.
+Click the badge above. Replit clones the repo, runs `npm install`, and serves the app at a public preview URL. Open Settings, paste your Runflow + OpenAI keys, drop a supplier image. ~2 minutes to first brand pack.
 
 ### Option B — Run locally
 
@@ -61,11 +62,11 @@ Supplier photo (+ optional reference style image)
 - **Lightbox with arrow-key nav** for browsing the output pack
 - **Recent packs persist in IndexedDB** — survives reloads, click any past pack to reopen
 - **ZIP download** of all 7 assets
-- **Zero backend** — all API calls happen in the browser, keys stay in localStorage
+- **Keys stay in localStorage** — never touch any server you don't own
 
 ## Customize it
 
-This is the Lovable template — open it in Lovable (or any IDE) and modify away. Common edits:
+Open the project in Replit, Cursor, VS Code, or any IDE and modify away. Common edits:
 
 | What | Where |
 |---|---|
@@ -80,15 +81,15 @@ This is the Lovable template — open it in Lovable (or any IDE) and modify away
 
 | Concern | How it's handled |
 |---|---|
-| API keys | `localStorage` only. Never sent anywhere except api.runflow.io + api.openai.com directly. |
-| Job state | `useState` in App.tsx during a run |
+| API keys | `localStorage` only. Set via the in-app Settings modal. |
+| Job state | `useState` in `App.tsx` during a run |
 | Output assets | Blob URLs (`URL.createObjectURL`) for display + JSZip for the bundle |
 | History | IndexedDB (`src/lib/history.ts`) — survives reloads, scoped to the browser |
-| No backend | Truly zero — no Vercel functions, no Supabase. The whole app is static + browser APIs |
+| CORS workaround | Vite dev-server proxy in `vite.config.ts` forwards `/api/runflow/*` and `/api/asset-proxy` to Runflow + image CDNs server-side, so the browser never hits CORS. Works the same on Replit. |
 
 ## Caveats
 
-- **Browser CORS:** Runflow and OpenAI both allow CORS from browsers. If you fork and add an unrelated API that doesn't, you'll need a Vercel function or similar.
+- **CORS via proxy:** Runflow's API doesn't yet return CORS headers, so we route browser calls through the Vite dev-server. Works automatically on `npm run dev` and on Replit. If you ever build to static + serve from a different host, you'll need an equivalent proxy (Vercel function, Cloudflare Worker, etc.).
 - **Keys in the browser:** secure enough for a self-hosted personal tool. If you ship this as a multi-tenant SaaS, move keys server-side via a proxy.
 - **IndexedDB size:** each pack is ~3-7MB of image blobs. After ~50 packs you might hit storage warnings — clear via browser dev tools or extend `src/lib/history.ts` to LRU-evict.
 
