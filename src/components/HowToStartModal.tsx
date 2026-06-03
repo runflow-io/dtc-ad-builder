@@ -139,11 +139,14 @@ npm run dev`}
           </Step>
 
           {/* STEP 3 */}
-          <Step n={3} title="Paste keys and run">
+          <Step n={3} title="Paste keys, pick options, run">
             <p className="text-sm text-ink-2 leading-relaxed mb-3">
-              Open Settings, paste both keys, drop a supplier image (AliExpress / 1688 /
-              Alibaba), and click <span className="font-semibold">Generate brand pack</span>.
-              First output in ~90 seconds.
+              Open Settings, paste both keys, drop a supplier image, pick the operations
+              you want (isolate, remove object, lifestyle scenes, etc.) and the platforms
+              you'll publish on (TikTok, Instagram, Amazon, etc.). Click{" "}
+              <span className="font-semibold">Generate pack</span> — you'll get every
+              selected output plus smart-resized variants for every selected platform's
+              aspect ratios.
             </p>
             <button
               onClick={() => { onClose(); onOpenSettings(); }}

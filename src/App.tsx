@@ -3,6 +3,8 @@ import { Header } from "./components/Header";
 import { SettingsModal } from "./components/SettingsModal";
 import { HowToStartModal } from "./components/HowToStartModal";
 import { Dropzone } from "./components/Dropzone";
+import { OperationPicker } from "./components/OperationPicker";
+import { PlatformPicker } from "./components/PlatformPicker";
 import { Pipeline } from "./components/Pipeline";
 import { ResultGrid } from "./components/ResultGrid";
 import { RecentPacks } from "./components/RecentPacks";
@@ -11,6 +13,8 @@ import { loadKeys, saveKeys, type Keys } from "./lib/keys";
 import { runPipeline, type Analysis, type AssetFile, type StepKey, type StepStatus } from "./lib/pipeline";
 import { savePack, type RecentPack } from "./lib/history";
 import { buildZip } from "./lib/zip";
+import type { Operation, Platform } from "./lib/options";
+import { uniqueRatios } from "./lib/options";
 
 type Steps = Record<StepKey, StepStatus>;
 
@@ -34,6 +38,17 @@ export default function App() {
 
   const [source, setSource] = useState<File | null>(null);
   const [reference, setReference] = useState<File | null>(null);
+
+  // Sensible defaults — closest equivalent to the original 7-asset brand pack.
+  const [operations, setOperations] = useState<Operation[]>([
+    "isolate",
+    "background_replace",
+    "lifestyle_scenes",
+  ]);
+  const [platforms, setPlatforms] = useState<Platform[]>([
+    "tiktok",
+    "instagram_feed",
+  ]);
 
   const [steps, setSteps] = useState<Steps>(INITIAL_STEPS);
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
@@ -67,15 +82,25 @@ export default function App() {
   }, []);
 
   const keysOk = !!(keys.runflow && keys.openai);
-  const ready = keysOk && !!source && !running;
+  const ready = keysOk && !!source && operations.length > 0 && !running;
 
   const ctaHint = useMemo(() => {
     if (!keysOk) return "Add API keys in settings to enable";
     if (!source) return "Drop a supplier image to enable";
+    if (operations.length === 0) return "Pick at least one operation to enable";
     if (running) return "Generating…";
-    if (reference) return "Ready · scenes will match the reference style · ~90s";
-    return "Ready · AI will pick lifestyle scenes · ~90s";
-  }, [keysOk, source, running, reference]);
+    const ratios = uniqueRatios(platforms).filter((r) => r !== "1:1");
+    const sceneCount =
+      (operations.includes("background_replace") ? 1 : 0) +
+      (operations.includes("lifestyle_scenes") ? 3 : 0);
+    const ratioCount = sceneCount * ratios.length;
+    const baseCount =
+      (operations.includes("isolate") ? 1 : 0) +
+      sceneCount +
+      (operations.includes("remove_object") ? 1 : 0);
+    const total = baseCount + ratioCount;
+    return `Ready · ${total} asset${total === 1 ? "" : "s"} · ~${30 + (sceneCount + ratioCount) * 15}s`;
+  }, [keysOk, source, running, operations, platforms]);
 
   // === collect a fresh, deduped, ordered lightbox set whenever an image is clicked ===
   const buildLightboxItems = (clickedSrc: string): { items: LightboxItem[]; index: number } => {
@@ -148,13 +173,14 @@ export default function App() {
 
     try {
       await runPipeline(
-        { source, reference, keys },
+        { source, reference, operations, platforms, keys },
         (u) => {
           if (u.type === "step") {
             setSteps((prev) => ({ ...prev, [u.key]: u.status }));
           } else if (u.type === "analysis") {
             setAnalysis(u.analysis);
           } else if (u.type === "asset") {
+            // labels come from the pipeline itself now (dynamic per selection)
             collected.push({ key: u.key, blob: u.blob, filename: u.filename, label: "" });
             const blobUrl = URL.createObjectURL(u.blob);
             setAssetUrls((prev) => ({ ...prev, [u.key]: blobUrl }));
@@ -162,17 +188,8 @@ export default function App() {
         }
       );
 
-      // build the final asset list with labels
-      const labelMap: Record<string, string> = {
-        cutout: "RGBA cutout",
-        white: "White studio (Amazon main)",
-        life_a: "Lifestyle A",
-        life_b: "Lifestyle B",
-        life_c: "Lifestyle C",
-        hero: "9:16 hero (TikTok / Reel)",
-        ad: "1:1 ad creative",
-      };
-      const finalAssets: AssetFile[] = collected.map((a) => ({ ...a, label: labelMap[a.key] || a.key }));
+      // pipeline owns the labels — App just preserves them via the AssetFile
+      const finalAssets: AssetFile[] = collected;
       setAssets(finalAssets);
 
       // zip
@@ -245,46 +262,81 @@ export default function App() {
 
       <section className="mb-9">
         <div className="font-mono uppercase tracking-widest text-[11px] text-amber font-bold mb-2.5">
-          Runflow template · v0.1
+          Runflow template · v0.2
         </div>
         <h1 className="font-bold text-[36px] leading-[1.1] tracking-tight mb-2.5">
-          Turn one supplier photo into a store-ready brand pack.
+          Upload one supplier photo. Pick what to do. Get a store-ready pack.
         </h1>
-        <p className="text-ink-2 text-sm leading-relaxed max-w-[760px]">
-          Drop an AliExpress, 1688, or Alibaba product image. We extract the product,
-          clean up watermarks, and generate a 7-asset pack: cutout, white-background studio,
-          3 lifestyle scenes (auto-picked per product category), 9:16 hero, 1:1 ad creative.
-          ~90 seconds per product. Pay-as-you-go via your own Runflow + OpenAI keys.
+        <p className="text-ink-2 text-sm leading-relaxed max-w-[820px]">
+          Drop any product image. Pick the operations you want — isolate, remove objects,
+          replace background, generate lifestyle scenes. Pick where you'll publish —
+          TikTok, Instagram, Pinterest, Amazon. We fan out to every selected aspect ratio
+          via Runflow's smart-resize and pack everything into a ZIP. Pay-as-you-go via
+          your own Runflow + OpenAI keys.
         </p>
       </section>
 
       <RecentPacks refreshKey={recentTick} onOpen={onOpenRecent} onNew={onNewPack} />
 
-      <section className="mb-10">
+      <section className="mb-10 space-y-7">
+        {/* 1 — source image (+ optional reference) */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           <Dropzone
             label="1 · Supplier image"
             required
             hint="Drop the supplier photo"
-            subHint="Right-click any AliExpress / 1688 / Alibaba product image → save → drop here"
+            subHint="Any AliExpress / 1688 / Alibaba / supplier image you saved"
             file={source}
             onChange={setSource}
           />
           <Dropzone
             label="2 · Reference style"
             hint="Match the look of an ad you like"
-            subHint="Save a frame from a Meta / TikTok / IG ad you want to mimic. We'll match its lighting, palette, mood for the 3 lifestyle scenes. Leave empty for AI-picked scenes."
+            subHint="Save a frame from a Meta / TikTok / IG ad you want to mimic. We'll match its lighting, palette, mood for the lifestyle scenes. Skip for AI-picked scenes."
             file={reference}
             onChange={setReference}
           />
         </div>
-        <div className="flex items-center gap-3.5 mt-5">
+
+        {/* 3 — operations */}
+        <div>
+          <div className="flex items-end justify-between mb-3">
+            <div>
+              <div className="font-mono uppercase tracking-wider text-[11px] text-muted font-semibold mb-0.5">
+                3 · What to do
+              </div>
+              <div className="text-[12px] text-ink-2">
+                Pick one or more. Mask-based operations auto-detect their region via{" "}
+                <code className="bg-panel-2 px-1.5 py-0.5 rounded font-mono text-[10px] text-amber">runflow/smart-segmentation</code>{" "}— no manual masking.
+              </div>
+            </div>
+          </div>
+          <OperationPicker selected={operations} onChange={setOperations} />
+        </div>
+
+        {/* 4 — platforms */}
+        <div>
+          <div className="flex items-end justify-between mb-3">
+            <div>
+              <div className="font-mono uppercase tracking-wider text-[11px] text-muted font-semibold mb-0.5">
+                4 · Where you'll publish
+              </div>
+              <div className="text-[12px] text-ink-2">
+                Each picked platform's aspect ratios run through{" "}
+                <code className="bg-panel-2 px-1.5 py-0.5 rounded font-mono text-[10px] text-amber">runflow/smart-resize</code>{" "}— one zip with every variant. Skip to keep base 1:1 only.
+              </div>
+            </div>
+          </div>
+          <PlatformPicker selected={platforms} onChange={setPlatforms} />
+        </div>
+
+        <div className="flex items-center gap-3.5">
           <button
             onClick={onRun}
             disabled={!ready}
             className="px-5 py-3 bg-ink hover:bg-amber text-white text-sm font-semibold rounded-md transition-colors shadow-soft disabled:bg-faint disabled:cursor-not-allowed"
           >
-            Generate brand pack →
+            Generate pack →
           </button>
           <span className="text-muted text-xs">{ctaHint}</span>
         </div>
