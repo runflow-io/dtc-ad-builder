@@ -127,24 +127,38 @@ export default function App() {
   const ready =
     keysOk && !!source && operations.length > 0 && !running && !lifestyleWithoutRef;
 
+  // Asset-count breakdown — computed independently of upload state so the
+  // user can see what they'll get before dropping the image.
+  const packBreakdown = useMemo(() => {
+    const ratios = uniqueRatios(platforms).filter((r) => r !== "1:1");
+    const sceneCount =
+      (operations.includes("background_replace") ? 1 : 0) +
+      (operations.includes("lifestyle_scenes") ? 3 : 0);
+    const ratioCount = sceneCount * ratios.length;
+    const cutout = operations.includes("isolate") ? 1 : 0;
+    const cleaned = operations.includes("remove_object") ? 1 : 0;
+    const ghost = operations.includes("remove_model") ? 1 : 0;
+    const baseCount = cutout + cleaned + ghost + sceneCount;
+    const total = baseCount + ratioCount;
+    const etaSec = 30 + (sceneCount + ratioCount) * 15;
+    const parts: string[] = [];
+    if (cutout) parts.push("1 cutout");
+    if (cleaned) parts.push("1 cleaned");
+    if (ghost) parts.push("1 ghost mannequin");
+    if (operations.includes("background_replace")) parts.push("1 studio");
+    if (operations.includes("lifestyle_scenes")) parts.push("3 lifestyle scenes");
+    if (ratios.length) parts.push(`× ${ratios.length} extra ratio${ratios.length === 1 ? "" : "s"}`);
+    return { total, etaSec, parts };
+  }, [operations, platforms]);
+
   const ctaHint = useMemo(() => {
     if (!keysOk) return "Add API keys in settings to enable";
     if (!source) return "Drop a supplier image to enable";
     if (operations.length === 0) return "Pick at least one operation to enable";
     if (lifestyleWithoutRef) return "Lifestyle scenes need a reference style image — drop one in slot 2";
     if (running) return "Generating…";
-    const ratios = uniqueRatios(platforms).filter((r) => r !== "1:1");
-    const sceneCount =
-      (operations.includes("background_replace") ? 1 : 0) +
-      (operations.includes("lifestyle_scenes") ? 3 : 0);
-    const ratioCount = sceneCount * ratios.length;
-    const baseCount =
-      (operations.includes("isolate") ? 1 : 0) +
-      sceneCount +
-      (operations.includes("remove_object") ? 1 : 0);
-    const total = baseCount + ratioCount;
-    return `Ready · ${total} asset${total === 1 ? "" : "s"} · ~${30 + (sceneCount + ratioCount) * 15}s`;
-  }, [keysOk, source, running, operations, platforms, lifestyleWithoutRef]);
+    return `Ready · ~${packBreakdown.etaSec}s`;
+  }, [keysOk, source, running, operations, lifestyleWithoutRef, packBreakdown]);
 
   // Each consumer (Pipeline, ResultGrid, PackDetail) builds its OWN ordered
   // list of LightboxItems and hands it to onZoom. This decouples the lightbox
@@ -393,7 +407,7 @@ export default function App() {
               </div>
             </div>
 
-            <div className="flex items-center gap-3.5">
+            <div className="flex items-center gap-3.5 flex-wrap">
               <button
                 onClick={onRun}
                 disabled={!ready}
@@ -401,6 +415,17 @@ export default function App() {
               >
                 Generate pack →
               </button>
+              {packBreakdown.total > 0 ? (
+                <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-panel border border-line rounded-full">
+                  <span className="font-mono font-bold text-[13px] text-amber">
+                    {packBreakdown.total}
+                  </span>
+                  <span className="text-[11px] text-ink-2">
+                    image{packBreakdown.total === 1 ? "" : "s"} ·{" "}
+                    <span className="text-muted">{packBreakdown.parts.join(" · ")}</span>
+                  </span>
+                </div>
+              ) : null}
               <span className="text-muted text-xs">{ctaHint}</span>
             </div>
           </section>
