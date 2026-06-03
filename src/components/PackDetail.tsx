@@ -145,9 +145,12 @@ export function PackDetail({ pack, onClose, onZoom }: Props) {
       </div>
 
       {/* grouped asset sections */}
-      <div className="space-y-8 mb-10">
+      <div className="grid grid-cols-12 gap-x-6 gap-y-8 mb-10">
         {groupAssets(pack.assets).map((section) => (
-          <div key={section.folder}>
+          <div
+            key={section.folder}
+            className={section.items.length === 1 ? "col-span-12 md:col-span-6" : "col-span-12"}
+          >
             <div className="flex items-baseline justify-between mb-3">
               <div>
                 <h3 className="text-sm font-semibold text-ink">{section.title}</h3>
