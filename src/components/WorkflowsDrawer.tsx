@@ -17,6 +17,8 @@ type CatalogItem = {
   isWorkflow?: boolean;
 };
 
+type DrawerTab = "workflows" | "models";
+
 const CATALOG_URL = "https://www.runflow.io/models-catalog.json";
 
 // Cache across drawer open/close within the same page-load.
@@ -32,6 +34,7 @@ export function WorkflowsDrawer({ open, onClose }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<string>("all");
+  const [tab, setTab] = useState<DrawerTab>("workflows");
 
   useEffect(() => {
     if (!open || cached) return;
@@ -57,17 +60,34 @@ export function WorkflowsDrawer({ open, onClose }: Props) {
     return () => window.removeEventListener("keydown", onEsc);
   }, [open, onClose]);
 
-  const categories = useMemo(() => {
+  // Items scoped to the current tab — workflows (Runflow's curated pipelines,
+  // isWorkflow=true) vs models (raw model catalog).
+  const tabItems = useMemo(() => {
     if (!items) return [];
-    const set = new Set<string>();
-    items.forEach((i) => i.category && set.add(i.category));
-    return Array.from(set).sort();
+    return items.filter((i) => (tab === "workflows" ? i.isWorkflow : !i.isWorkflow));
+  }, [items, tab]);
+
+  const counts = useMemo(() => {
+    if (!items) return { workflows: 0, models: 0 };
+    let w = 0;
+    let m = 0;
+    for (const i of items) {
+      if (i.active === false) continue;
+      if (i.isWorkflow) w++;
+      else m++;
+    }
+    return { workflows: w, models: m };
   }, [items]);
 
+  const categories = useMemo(() => {
+    const set = new Set<string>();
+    tabItems.forEach((i) => i.category && set.add(i.category));
+    return Array.from(set).sort();
+  }, [tabItems]);
+
   const filtered = useMemo(() => {
-    if (!items) return [];
     const q = query.trim().toLowerCase();
-    return items.filter((i) => {
+    return tabItems.filter((i) => {
       if (i.active === false) return false;
       if (category !== "all" && i.category !== category) return false;
       if (!q) return true;
@@ -77,7 +97,13 @@ export function WorkflowsDrawer({ open, onClose }: Props) {
         i.provider_name?.toLowerCase().includes(q)
       );
     });
-  }, [items, query, category]);
+  }, [tabItems, query, category]);
+
+  // Reset category filter when switching tabs so a stale category doesn't
+  // leave the list empty (workflows + models have different categories).
+  useEffect(() => {
+    setCategory("all");
+  }, [tab]);
 
   if (!open) return null;
 
@@ -86,20 +112,46 @@ export function WorkflowsDrawer({ open, onClose }: Props) {
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
       <aside className="relative w-full max-w-[480px] h-full bg-bg border-l border-line flex flex-col shadow-card">
         {/* header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-line">
-          <div>
-            <div className="font-mono uppercase tracking-wider text-[10px] text-muted font-bold">
-              Runflow catalog
+        <div className="px-5 pt-4 pb-0 border-b border-line">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <div className="font-mono uppercase tracking-wider text-[10px] text-muted font-bold">
+                Runflow catalog
+              </div>
+              <h3 className="text-base font-semibold leading-tight">
+                {tab === "workflows" ? "Workflows" : "Models"}
+              </h3>
+              <p className="text-[11px] text-muted mt-0.5">
+                {tab === "workflows"
+                  ? "Ready-made pipelines, one API call"
+                  : "Raw models from every provider in the catalog"}
+              </p>
             </div>
-            <h3 className="text-base font-semibold leading-tight">All workflows</h3>
+            <button
+              onClick={onClose}
+              aria-label="Close"
+              className="w-8 h-8 rounded-full text-ink-2 hover:bg-panel-2 flex items-center justify-center"
+            >
+              <X className="w-4 h-4" />
+            </button>
           </div>
-          <button
-            onClick={onClose}
-            aria-label="Close"
-            className="w-8 h-8 rounded-full text-ink-2 hover:bg-panel-2 flex items-center justify-center"
-          >
-            <X className="w-4 h-4" />
-          </button>
+          {/* sub-tabs */}
+          <div className="flex gap-1 -mb-px">
+            <DrawerTabButton
+              active={tab === "workflows"}
+              onClick={() => setTab("workflows")}
+              count={counts.workflows}
+            >
+              Workflows
+            </DrawerTabButton>
+            <DrawerTabButton
+              active={tab === "models"}
+              onClick={() => setTab("models")}
+              count={counts.models}
+            >
+              Models
+            </DrawerTabButton>
+          </div>
         </div>
 
         {/* filters */}
@@ -206,6 +258,40 @@ export function WorkflowsDrawer({ open, onClose }: Props) {
         </div>
       </aside>
     </div>
+  );
+}
+
+function DrawerTabButton({
+  active,
+  onClick,
+  count,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  count: number;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={
+        "relative flex items-center gap-1.5 px-3 py-2 text-[13px] font-semibold border-b-2 transition-all -mb-[1px] " +
+        (active
+          ? "border-amber text-amber"
+          : "border-transparent text-ink-2 hover:text-ink hover:border-line")
+      }
+    >
+      {children}
+      <span
+        className={
+          "font-mono text-[10px] " + (active ? "text-amber/80" : "text-muted")
+        }
+      >
+        ({count})
+      </span>
+    </button>
   );
 }
 
