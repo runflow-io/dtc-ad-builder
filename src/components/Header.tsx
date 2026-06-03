@@ -1,12 +1,13 @@
-import { Settings, Sparkles } from "lucide-react";
+import { Settings, Sparkles, PlayCircle } from "lucide-react";
 
 type Props = {
   keysOk: boolean;
   onOpenSettings: () => void;
   onOpenHowToStart: () => void;
+  onOpenProductTour: () => void;
 };
 
-export function Header({ keysOk, onOpenSettings, onOpenHowToStart }: Props) {
+export function Header({ keysOk, onOpenSettings, onOpenHowToStart, onOpenProductTour }: Props) {
   return (
     <header className="flex items-center justify-between mb-8">
       <div className="flex items-center gap-3">
@@ -19,6 +20,13 @@ export function Header({ keysOk, onOpenSettings, onOpenHowToStart }: Props) {
         </div>
       </div>
       <div className="flex items-center gap-2">
+        <button
+          onClick={onOpenProductTour}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-ink hover:bg-ink/85 text-white text-xs font-semibold rounded-full shadow-soft transition-colors"
+        >
+          <PlayCircle className="w-3.5 h-3.5" />
+          Product tour
+        </button>
         <button
           onClick={onOpenHowToStart}
           className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber hover:bg-amber/90 text-white text-xs font-semibold rounded-full shadow-soft transition-colors"

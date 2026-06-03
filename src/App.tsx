@@ -15,6 +15,7 @@ import { PackDetail } from "./components/PackDetail";
 import { Lightbox, type LightboxItem } from "./components/Lightbox";
 import { CropperModal } from "./components/CropperModal";
 import { WorkflowsDrawer } from "./components/WorkflowsDrawer";
+import { ProductTourModal } from "./components/ProductTourModal";
 import { loadKeys, saveKeys, type Keys } from "./lib/keys";
 import { runPipeline, type Analysis, type AssetFile, type StepKey, type StepStatus } from "./lib/pipeline";
 import { savePack, listPacks, type RecentPack } from "./lib/history";
@@ -42,6 +43,7 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [howToOpen, setHowToOpen] = useState(false);
   const [workflowsOpen, setWorkflowsOpen] = useState(false);
+  const [productTourOpen, setProductTourOpen] = useState(false);
 
   const [source, setSource] = useState<File | null>(null);
   const [reference, setReference] = useState<File | null>(null);
@@ -386,6 +388,7 @@ export default function App() {
         keysOk={keysOk}
         onOpenSettings={() => setSettingsOpen(true)}
         onOpenHowToStart={() => setHowToOpen(true)}
+        onOpenProductTour={() => setProductTourOpen(true)}
       />
 
       <section className="mb-7">
@@ -658,6 +661,8 @@ export default function App() {
       ) : null}
 
       <WorkflowsDrawer open={workflowsOpen} onClose={() => setWorkflowsOpen(false)} />
+
+      <ProductTourModal open={productTourOpen} onClose={() => setProductTourOpen(false)} />
     </div>
   );
 }
