@@ -4,7 +4,9 @@
 // is passed at call time. Runflow handles per-call billing on their side —
 // the template never sees the user's money.
 
-const RUNFLOW_BASE = "https://api.runflow.io/v1";
+// Calls go through the Vite dev-server proxy (vite.config.ts) which forwards
+// to https://api.runflow.io/v1 server-side, sidestepping browser CORS.
+const RUNFLOW_BASE = "/api/runflow";
 
 export class RunflowError extends Error {
   constructor(message: string, public status?: number) {
