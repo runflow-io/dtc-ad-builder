@@ -16,24 +16,59 @@ export class RunflowError extends Error {
 async function runflowFetch(
   path: string,
   apiKey: string,
-  init: RequestInit = {}
+  init: RequestInit = {},
+  retries = 2
 ): Promise<any> {
-  const res = await fetch(`${RUNFLOW_BASE}${path}`, {
-    ...init,
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-      ...(init.headers || {}),
-    },
-  });
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new RunflowError(
-      `Runflow ${init.method || "GET"} ${path} -> ${res.status}: ${body.slice(0, 400)}`,
-      res.status
-    );
+  let lastErr: unknown = null;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const res = await fetch(`${RUNFLOW_BASE}${path}`, {
+        ...init,
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+          ...(init.headers || {}),
+        },
+      });
+      if (!res.ok) {
+        const body = await res.text().catch(() => "");
+        // Don't retry on auth/permission/validation errors — they won't pass on retry
+        if (res.status === 401 || res.status === 403 || res.status === 422 || res.status === 400) {
+          throw new RunflowError(
+            `Runflow ${init.method || "GET"} ${path} -> ${res.status}: ${body.slice(0, 400)}`,
+            res.status
+          );
+        }
+        // Retry on 5xx, 429
+        lastErr = new RunflowError(
+          `Runflow ${init.method || "GET"} ${path} -> ${res.status}: ${body.slice(0, 400)}`,
+          res.status
+        );
+        if (attempt < retries) {
+          await new Promise((r) => setTimeout(r, 800 * (attempt + 1)));
+          continue;
+        }
+        throw lastErr;
+      }
+      return res.json();
+    } catch (err) {
+      // fetch() rejected (network / CORS / DNS / abort) — retry once or twice
+      if (err instanceof RunflowError) throw err; // already handled above
+      lastErr = err;
+      const msg = (err as Error)?.message || String(err);
+      if (attempt < retries) {
+        await new Promise((r) => setTimeout(r, 800 * (attempt + 1)));
+        continue;
+      }
+      // surface the actual cause — most often "Failed to fetch" = CORS or network
+      throw new RunflowError(
+        `Runflow ${init.method || "GET"} ${path} network error: ${msg}. ` +
+          `If this persists, it may be a CORS rejection on the Runflow endpoint — open the browser DevTools Console for the exact reason.`,
+        0
+      );
+    }
   }
-  return res.json();
+  throw lastErr || new RunflowError(`Runflow ${path} failed`, 0);
 }
 
 // ---------- asset upload (browser → Runflow assets bucket) ----------
