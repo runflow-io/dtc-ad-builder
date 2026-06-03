@@ -656,15 +656,21 @@ export default function App() {
         />
       ) : null}
 
-      {/* Right-edge tab → opens the Runflow models catalog drawer */}
+      {/* Right-edge tab → opens the Runflow models catalog drawer.
+          Use a fixed-size container + rotated child so we don't rely on
+          writing-mode (it collapses to zero height in some Safari builds). */}
       <button
         type="button"
         onClick={() => setWorkflowsOpen(true)}
         title="Browse all Runflow workflows"
-        className="fixed right-0 top-1/2 -translate-y-1/2 z-30 inline-flex items-center gap-1.5 px-3 py-2.5 bg-ink hover:bg-amber text-white text-[11px] font-mono uppercase tracking-wider font-bold rounded-l-md shadow-card transition-colors"
-        style={{ writingMode: "vertical-rl", textOrientation: "mixed" }}
+        className="fixed right-0 top-1/2 -translate-y-1/2 z-40 w-9 h-44 bg-ink hover:bg-amber text-white rounded-l-md shadow-card transition-colors flex items-center justify-center"
       >
-        See all workflows
+        <span
+          className="font-mono uppercase tracking-wider text-[11px] font-bold whitespace-nowrap"
+          style={{ transform: "rotate(180deg)", writingMode: "vertical-rl" }}
+        >
+          See all workflows →
+        </span>
       </button>
 
       <WorkflowsDrawer open={workflowsOpen} onClose={() => setWorkflowsOpen(false)} />
