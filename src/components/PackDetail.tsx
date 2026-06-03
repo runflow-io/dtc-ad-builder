@@ -164,12 +164,12 @@ export function PackDetail({ pack, onClose, onZoom }: Props) {
                 return (
                   <figure
                     key={a.key}
-                    className="bg-panel border border-line rounded-[10px] overflow-hidden flex flex-col hover:border-amber-border hover:shadow-soft transition-all"
+                    className="bg-panel border border-line rounded-[10px] flex flex-col hover:border-amber-border hover:shadow-soft transition-all"
                   >
                     <button
                       onClick={() => handleZoom(url)}
                       className={
-                        "aspect-square flex items-center justify-center overflow-hidden cursor-zoom-in " +
+                        "aspect-square flex items-center justify-center overflow-hidden rounded-t-[10px] cursor-zoom-in " +
                         (a.key === "cutout" ? "checker" : "bg-panel-2")
                       }
                     >
@@ -189,7 +189,7 @@ export function PackDetail({ pack, onClose, onZoom }: Props) {
                             <Info className="w-3 h-3 text-muted hover:text-amber flex-shrink-0 cursor-help" />
                             <div
                               role="tooltip"
-                              className="invisible group-hover:visible absolute z-30 left-0 bottom-full mb-1.5 w-60 p-2.5 bg-ink text-white text-[11px] leading-snug rounded-md shadow-soft"
+                              className="invisible group-hover:visible pointer-events-none absolute z-40 left-1/2 -translate-x-1/2 bottom-full mb-2 w-56 p-2.5 bg-ink text-white text-[11px] leading-snug rounded-md shadow-card"
                             >
                               {a.description}
                             </div>
