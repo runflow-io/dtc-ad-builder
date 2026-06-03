@@ -98,6 +98,19 @@ export default function App() {
   const [jobId, setJobId] = useState<string>("");
   const [recentTick, setRecentTick] = useState(0);
 
+  // FIFO queue — clicking Generate enqueues a snapshot; the drainer runs
+  // jobs one at a time so the user can stack work while one's in progress.
+  type QueueJob = {
+    id: string;
+    source: File;
+    reference: File | null;
+    operations: Operation[];
+    platforms: Platform[];
+  };
+  const [queue, setQueue] = useState<QueueJob[]>([]);
+  const queueRef = useRef<QueueJob[]>([]);
+  const drainingRef = useRef(false);
+
   const [lbItems, setLbItems] = useState<LightboxItem[] | null>(null);
   const [lbIndex, setLbIndex] = useState(0);
 
@@ -135,8 +148,9 @@ export default function App() {
 
   const keysOk = !!(keys.runflow && keys.openai);
   const lifestyleWithoutRef = operations.includes("lifestyle_scenes") && !reference;
+  // Generate is enabled even while a job is running — clicks just enqueue.
   const ready =
-    keysOk && !!source && operations.length > 0 && !running && !lifestyleWithoutRef;
+    keysOk && !!source && operations.length > 0 && !lifestyleWithoutRef;
 
   // Asset-count breakdown — computed independently of upload state so the
   // user can see what they'll get before dropping the image.
@@ -179,9 +193,14 @@ export default function App() {
     if (!source) return "Drop a supplier image to enable";
     if (operations.length === 0) return "Pick at least one operation to enable";
     if (lifestyleWithoutRef) return "Lifestyle scenes need a reference style image — drop one in slot 2";
-    if (running) return "Generating…";
+    if (running) {
+      const ahead = queue.length;
+      return ahead > 0
+        ? `Generating · ${ahead} queued ahead`
+        : "Generating · click to queue another";
+    }
     return `Ready · ~${packBreakdown.etaSec}s`;
-  }, [keysOk, source, running, operations, lifestyleWithoutRef, packBreakdown]);
+  }, [keysOk, source, running, operations, lifestyleWithoutRef, packBreakdown, queue.length]);
 
   // Each consumer (Pipeline, ResultGrid, PackDetail) builds its OWN ordered
   // list of LightboxItems and hands it to onZoom. This decouples the lightbox
@@ -217,32 +236,63 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const onRun = async () => {
+  // Enqueue + kick the drainer if it's idle.
+  const onRun = () => {
     if (!source) return;
     if (!keysOk) { setSettingsOpen(true); return; }
+    const job: QueueJob = {
+      id: newJobId(),
+      source,
+      reference,
+      operations: [...operations],
+      platforms: [...platforms],
+    };
+    queueRef.current = [...queueRef.current, job];
+    setQueue(queueRef.current);
+    setTab("processing");
+    void drainQueue();
+  };
 
+  const drainQueue = async () => {
+    if (drainingRef.current) return;
+    drainingRef.current = true;
+    try {
+      while (queueRef.current.length > 0) {
+        const next = queueRef.current[0];
+        queueRef.current = queueRef.current.slice(1);
+        setQueue(queueRef.current);
+        await executeJob(next);
+      }
+    } finally {
+      drainingRef.current = false;
+    }
+  };
+
+  const executeJob = async (job: QueueJob) => {
     resetForNew();
     setRunning(true);
-    setTab("processing"); // auto-switch the user to the Processing tab
-    const id = newJobId();
-    setJobId(id);
+    setJobId(job.id);
 
     // show source thumbnail immediately
-    const sourceUrl = URL.createObjectURL(source);
+    const sourceUrl = URL.createObjectURL(job.source);
     setAssetUrls((prev) => ({ ...prev, __source: sourceUrl }));
 
     setSteps({ ...INITIAL_STEPS, upload: "running" });
 
     const collected: AssetFile[] = [];
     const workflowAcc: string[] = [];
+    // Capture analysis locally — relying on the React state closure across
+    // an await chain returns stale values when multiple jobs queue back-to-back.
+    let latestAnalysis: Analysis | null = null;
 
     try {
       const result = await runPipeline(
-        { source, reference, operations, platforms, keys },
+        { source: job.source, reference: job.reference, operations: job.operations, platforms: job.platforms, keys },
         (u) => {
           if (u.type === "step") {
             setSteps((prev) => ({ ...prev, [u.key]: u.status }));
           } else if (u.type === "analysis") {
+            latestAnalysis = u.analysis;
             setAnalysis(u.analysis);
           } else if (u.type === "asset") {
             // labels + description come from the pipeline (dynamic per selection)
@@ -277,15 +327,16 @@ export default function App() {
         finalAssets.find((a) => a.key === "cutout") ||
         finalAssets[0];
       if (thumbAsset) {
+        const a = latestAnalysis as Analysis | null;
         const pack: RecentPack = {
-          id,
+          id: job.id,
           createdAt: Date.now(),
-          product: (analysis?.product) || (await collectedAnalysisProduct()) || "Pack",
-          category: analysis?.category || "",
-          analysis: analysis as Analysis,
+          product: a?.product || "Pack",
+          category: a?.category || "",
+          analysis: (a ?? {} as Analysis),
           thumb: thumbAsset.blob,
           thumbName: thumbAsset.filename,
-          source: source ? { blob: source, filename: source.name || "supplier.jpg" } : undefined,
+          source: { blob: job.source, filename: job.source.name || "supplier.jpg" },
           assets: finalAssets.map((a) => ({
             key: a.key,
             label: a.label,
