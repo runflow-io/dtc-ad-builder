@@ -35,13 +35,11 @@ export function HowItWorks() {
               key={s.n}
               className="bg-panel border border-line rounded-xl p-5 hover:border-amber-border hover:shadow-soft transition-all"
             >
-              <div className="flex items-center gap-3 mb-3">
+              <div className="flex items-center gap-2.5 mb-3">
                 <div className="w-9 h-9 rounded-full bg-green text-white font-bold text-base flex items-center justify-center shadow-soft">
                   {s.n}
                 </div>
-                <div className="w-9 h-9 rounded-md bg-panel-2 text-ink-2 flex items-center justify-center">
-                  <Icon className="w-4 h-4" />
-                </div>
+                <Icon className="w-5 h-5 text-ink-2" />
               </div>
               <h3 className="text-base font-semibold mb-1.5 leading-snug">{s.title}</h3>
               <p className="text-[13px] text-ink-2 leading-relaxed">{s.body}</p>
