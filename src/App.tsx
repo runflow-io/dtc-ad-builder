@@ -328,62 +328,57 @@ export default function App() {
               />
             </div>
 
-            <div>
-              <div className="flex items-end justify-between mb-3">
-                <div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-6 gap-y-7">
+              {/* 3 — operations (left column) */}
+              <div>
+                <div className="mb-3">
                   <div className="font-mono uppercase tracking-wider text-[11px] text-muted font-semibold mb-0.5">
                     3 · What to do
                   </div>
                   <div className="text-[12px] text-ink-2">
-                    Pick a preset that fits your input — or expand Advanced to mix
-                    operations. Mask-based ops auto-detect their region via{" "}
-                    <code className="bg-panel-2 px-1.5 py-0.5 rounded font-mono text-[10px] text-amber">
-                      runflow/smart-segmentation
-                    </code>.
+                    Pick a preset that fits your input — or expand Advanced to mix individually.
                   </div>
                 </div>
+                <PresetPicker
+                  selected={currentPreset}
+                  hasReference={!!reference}
+                  onChange={onPresetChange}
+                />
+                <div className="mt-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowAdvanced((v) => !v)}
+                    className="text-xs text-amber font-semibold hover:underline"
+                  >
+                    {showAdvanced ? "Hide advanced" : "Show advanced — pick individual operations"}
+                  </button>
+                  {showAdvanced ? (
+                    <div className="mt-3">
+                      <OperationPicker
+                        selected={operations}
+                        hasReference={!!reference}
+                        onChange={setOperations}
+                      />
+                    </div>
+                  ) : null}
+                </div>
               </div>
-              <PresetPicker
-                selected={currentPreset}
-                hasReference={!!reference}
-                onChange={onPresetChange}
-              />
 
-              <div className="mt-3">
-                <button
-                  type="button"
-                  onClick={() => setShowAdvanced((v) => !v)}
-                  className="text-xs text-amber font-semibold hover:underline"
-                >
-                  {showAdvanced ? "Hide advanced" : "Show advanced — pick individual operations"}
-                </button>
-                {showAdvanced ? (
-                  <div className="mt-3">
-                    <OperationPicker
-                      selected={operations}
-                      hasReference={!!reference}
-                      onChange={setOperations}
-                    />
-                  </div>
-                ) : null}
-              </div>
-            </div>
-
-            <div>
-              <div className="flex items-end justify-between mb-3">
-                <div>
+              {/* 4 — platforms (right column) */}
+              <div>
+                <div className="mb-3">
                   <div className="font-mono uppercase tracking-wider text-[11px] text-muted font-semibold mb-0.5">
                     4 · Where you'll publish
                   </div>
                   <div className="text-[12px] text-ink-2">
-                    Each picked platform's aspect ratios run through{" "}
-                    <code className="bg-panel-2 px-1.5 py-0.5 rounded font-mono text-[10px] text-amber">
+                    Each ratio runs through{" "}
+                    <code className="bg-panel-2 px-1 py-0.5 rounded font-mono text-[10px] text-amber">
                       runflow/smart-resize
-                    </code>{" "}— one zip with every variant. Skip to keep base 1:1 only.
+                    </code>{" "}— one zip with every variant.
                   </div>
                 </div>
+                <PlatformPicker selected={platforms} onChange={setPlatforms} />
               </div>
-              <PlatformPicker selected={platforms} onChange={setPlatforms} />
             </div>
 
             <div className="flex items-center gap-3.5">

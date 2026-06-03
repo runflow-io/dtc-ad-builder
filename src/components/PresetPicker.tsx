@@ -77,7 +77,7 @@ type Props = {
 
 export function PresetPicker({ selected, hasReference, onChange }: Props) {
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5">
+    <div className="grid grid-cols-[repeat(auto-fit,minmax(160px,1fr))] gap-2.5">
       {PRESETS.map((p) => {
         const isOn = selected === p.key;
         const Icon = p.icon;

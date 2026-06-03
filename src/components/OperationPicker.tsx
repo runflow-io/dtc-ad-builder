@@ -17,7 +17,7 @@ export function OperationPicker({ selected, hasReference, onChange }: Props) {
   };
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+    <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-2.5">
       {OPERATIONS.map((op) => {
         const isOn = selected.includes(op.key);
         const Icon = op.icon;

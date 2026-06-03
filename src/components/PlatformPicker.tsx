@@ -1,5 +1,6 @@
 import { Check } from "lucide-react";
 import { PLATFORMS, type Platform } from "../lib/options";
+import { BrandIcon } from "./BrandIcon";
 
 type Props = {
   selected: Platform[];
@@ -13,7 +14,7 @@ export function PlatformPicker({ selected, onChange }: Props) {
   };
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+    <div className="grid grid-cols-[repeat(auto-fit,minmax(130px,1fr))] gap-2">
       {PLATFORMS.map((p) => {
         const isOn = selected.includes(p.key);
         return (
@@ -28,8 +29,16 @@ export function PlatformPicker({ selected, onChange }: Props) {
                 : "border-line bg-panel hover:border-amber-border hover:shadow-soft")
             }
           >
-            <div className="flex items-center justify-between mb-1.5">
-              <div className="text-xs font-semibold leading-snug">{p.label}</div>
+            <div className="flex items-center justify-between mb-1.5 gap-2">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <BrandIcon
+                  platform={p.key}
+                  className={
+                    "w-3.5 h-3.5 flex-shrink-0 " + (isOn ? "text-amber" : "text-ink-2")
+                  }
+                />
+                <div className="text-xs font-semibold leading-snug truncate">{p.label}</div>
+              </div>
               {isOn ? (
                 <div className="w-3.5 h-3.5 rounded-full bg-amber text-white flex items-center justify-center flex-shrink-0">
                   <Check className="w-2 h-2" strokeWidth={3} />

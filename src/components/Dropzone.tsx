@@ -70,7 +70,7 @@ export function Dropzone({ label, required, hint, subHint, file, onChange }: Pro
           if (inputRef.current) inputRef.current.value = "";
         }}
         className={
-          "relative rounded-xl transition-colors overflow-hidden flex items-center justify-center min-h-[300px] " +
+          "relative rounded-xl transition-colors overflow-hidden flex items-center justify-center min-h-[180px] " +
           (file
             ? "border border-line bg-panel"
             : drag
@@ -91,7 +91,7 @@ export function Dropzone({ label, required, hint, subHint, file, onChange }: Pro
         />
         {preview ? (
           <>
-            <img src={preview} className="max-w-full max-h-[460px] block pointer-events-none" />
+            <img src={preview} className="max-w-full max-h-[260px] block pointer-events-none" />
             <button
               type="button"
               onClick={clear}
