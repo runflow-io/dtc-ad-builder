@@ -130,11 +130,18 @@ export type WorkflowMeta = {
   external?: boolean;
 };
 
-// Runflow's public Solutions catalog uses the URL pattern
-//   https://www.runflow.io/api/<solution-name>
-// (NOT /models/{provider}/{slug} — that's the internal API path which returns 404
-// on the public site for OpenAI-backed solutions.)
+// Runflow has TWO public URL patterns depending on whether the call goes
+// through the Solutions API or the Model API.
+//
+//   Solutions (high-level workflows that own a pipeline):
+//     https://www.runflow.io/api/<solution-slug>
+//   Models (individual model endpoints exposed by provider):
+//     https://app.runflow.io/models/<provider>/<model-slug>
+//
+// runflow/* slugs are Solutions. openai/* slugs are Models (proxied via the
+// Model API). Direct OpenAI calls (gpt-4o vision) go to OpenAI docs.
 export const WORKFLOW_META: Record<string, WorkflowMeta> = {
+  // Solutions
   "runflow/product-isolation": {
     label: "Product Isolation",
     url: "https://www.runflow.io/api/product-isolation",
@@ -167,12 +174,12 @@ export const WORKFLOW_META: Record<string, WorkflowMeta> = {
     label: "Background Replace",
     url: "https://www.runflow.io/api/replace-background",
   },
-  // OpenAI-backed solutions don't have dedicated public pages on runflow.io,
-  // so we point at the closest match in the Solutions catalog.
+  // Models — Runflow Model API pages live on app.runflow.io
   "openai/gpt-image-2/edit": {
     label: "GPT Image 2 — Edit",
-    url: "https://www.runflow.io/api/prompt-based-image-editing",
+    url: "https://app.runflow.io/models/openai/gpt-image-2/edit",
   },
+  // Direct OpenAI calls (not proxied through Runflow) — OpenAI docs
   "openai/gpt-4o": {
     label: "GPT-4o (vision)",
     url: "https://platform.openai.com/docs/models/gpt-4o",
@@ -181,11 +188,13 @@ export const WORKFLOW_META: Record<string, WorkflowMeta> = {
 };
 
 export function workflowMeta(slug: string): WorkflowMeta {
-  return (
-    WORKFLOW_META[slug] || {
-      // Best-effort fallback: take the last segment as the slug for /api/<slug>
-      label: slug,
-      url: `https://www.runflow.io/api/${slug.split("/").pop()}`,
-    }
-  );
+  if (WORKFLOW_META[slug]) return WORKFLOW_META[slug];
+  // Fallback: route runflow/* to Solutions catalog, everything else to Model API page
+  const isRunflowSolution = slug.startsWith("runflow/");
+  return {
+    label: slug,
+    url: isRunflowSolution
+      ? `https://www.runflow.io/api/${slug.split("/").pop()}`
+      : `https://app.runflow.io/models/${slug}`,
+  };
 }
