@@ -8,9 +8,10 @@ html, body, #root { height: 100%; }
 body {
   margin: 0;
   font-family: "Outfit", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-  background:
-    radial-gradient(ellipse at 50% -10%, rgba(245,158,11,0.14) 0%, transparent 55%),
-    #F4EFE5;
+  background-color: #F4EFE5;
+  background-image: radial-gradient(ellipse 70% 360px at 50% 0%, rgba(245,158,11,0.14) 0%, transparent 80%);
+  background-repeat: no-repeat;
+  background-attachment: fixed;
   color: #18181B;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
