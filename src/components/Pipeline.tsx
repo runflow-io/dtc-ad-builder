@@ -1,5 +1,7 @@
 import { Check, X, Loader2 } from "lucide-react";
 import type { Analysis, StepKey, StepStatus } from "../lib/pipeline";
+import type { Operation, Platform } from "../lib/options";
+import { uniqueRatios } from "../lib/options";
 import type { LightboxItem } from "./Lightbox";
 
 type Steps = Record<StepKey, StepStatus>;
@@ -12,6 +14,8 @@ type Props = {
   steps: Steps;
   analysis: Analysis | null;
   assetUrls: Record<string, string>;
+  operations: Operation[];
+  platforms: Platform[];
   onZoom: ZoomFn;
 };
 
@@ -56,14 +60,28 @@ function pipelineZoom(assetUrls: Record<string, string>, clickedSrc: string, onZ
   onZoom(items, idx);
 }
 
-const STEP_META: Record<StepKey, { num: number; title: string; foot: string }> = {
-  upload: { num: 1, title: "Upload", foot: "Supplier image uploaded to Runflow assets" },
-  vision: { num: 2, title: "Vision", foot: "gpt-4o reads the photo + picks 3 lifestyle scenes" },
-  cleanup: { num: 3, title: "Cleanup", foot: "Strips watermarks, supplier text, prop hands (skipped if clean)" },
-  cutout: { num: 4, title: "Cutout", foot: "runflow/product-isolation extracts the product" },
-  scenes: { num: 5, title: "Scenes", foot: "gpt-image-2/edit · 4 scenes generated in parallel" },
-  ratios: { num: 6, title: "Ratios", foot: "outpaint + smart-resize for TikTok / Reel / Meta ad" },
-};
+function stepMeta(operations: Operation[], platforms: Platform[]) {
+  const ops = new Set(operations);
+  const sceneParts: string[] = [];
+  if (ops.has("background_replace")) sceneParts.push("white studio");
+  if (ops.has("lifestyle_scenes")) sceneParts.push("3 lifestyle scenes");
+  if (ops.has("remove_model")) sceneParts.push("ghost mannequin");
+  const sceneFoot = sceneParts.length
+    ? `gpt-image-2/edit · ${sceneParts.join(" + ")}`
+    : "Skipped — no scene operations selected";
+  const ratios = uniqueRatios(platforms).filter((r) => r !== "1:1");
+  const ratioFoot = ratios.length
+    ? `smart-resize + white-pad → ${ratios.join(", ")}`
+    : "Skipped — only 1:1 selected";
+  return {
+    upload: { num: 1, title: "Upload", foot: "Supplier image uploaded to Runflow assets" },
+    vision: { num: 2, title: "Vision", foot: "gpt-4o categorizes the product + drafts scene prompts" },
+    cleanup: { num: 3, title: "Cleanup", foot: "Strips watermarks, supplier text, prop hands (skipped if clean)" },
+    cutout: { num: 4, title: "Cutout", foot: "runflow/product-isolation extracts the product" },
+    scenes: { num: 5, title: "Scenes", foot: sceneFoot },
+    ratios: { num: 6, title: "Ratios", foot: ratioFoot },
+  } as Record<StepKey, { num: number; title: string; foot: string }>;
+}
 
 const STEP_ORDER: StepKey[] = ["upload", "vision", "cleanup", "cutout", "scenes", "ratios"];
 
@@ -111,14 +129,15 @@ function statusBadge(s: StepStatus, n: number) {
   );
 }
 
-export function Pipeline({ steps, analysis, assetUrls, onZoom }: Props) {
+export function Pipeline({ steps, analysis, assetUrls, operations, platforms, onZoom }: Props) {
+  const META = stepMeta(operations, platforms);
   return (
     <section className="mb-10">
       <h2 className="text-base font-semibold mb-3.5">Pipeline</h2>
       <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
         {STEP_ORDER.map((key) => {
           const s = steps[key];
-          const meta = STEP_META[key];
+          const meta = META[key];
           return (
             <div
               key={key}

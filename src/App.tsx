@@ -456,7 +456,7 @@ export default function App() {
                 </p>
               </div>
               {jobId ? (
-                <Pipeline steps={steps} analysis={analysis} assetUrls={assetUrls} onZoom={onZoom} />
+                <Pipeline steps={steps} analysis={analysis} assetUrls={assetUrls} operations={operations} platforms={platforms} onZoom={onZoom} />
               ) : null}
             </>
           ) : error ? (
@@ -469,7 +469,7 @@ export default function App() {
                 </p>
               </div>
               {jobId ? (
-                <Pipeline steps={steps} analysis={analysis} assetUrls={assetUrls} onZoom={onZoom} />
+                <Pipeline steps={steps} analysis={analysis} assetUrls={assetUrls} operations={operations} platforms={platforms} onZoom={onZoom} />
               ) : null}
               <section className="mt-7 bg-red-soft border border-red/30 rounded-[10px] p-5">
                 <pre className="font-mono text-xs text-red whitespace-pre-wrap m-0">{error}</pre>
