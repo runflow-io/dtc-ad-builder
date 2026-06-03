@@ -48,7 +48,8 @@ export type Analysis = {
 export type PipelineUpdate =
   | { type: "step"; key: StepKey; status: StepStatus; message?: string }
   | { type: "analysis"; analysis: Analysis }
-  | { type: "asset"; key: string; blob: Blob; filename: string };
+  | { type: "asset"; key: string; blob: Blob; filename: string }
+  | { type: "workflow"; slug: string };
 
 export type ProgressFn = (u: PipelineUpdate) => void;
 
@@ -222,10 +223,12 @@ export type AssetFile = {
 export async function runPipeline(input: PipelineInput, onProgress: ProgressFn): Promise<{
   analysis: Analysis;
   assets: AssetFile[];
+  workflows: string[];
 }> {
   const { source, reference, operations, platforms, keys } = input;
   const ops = new Set(operations);
   const assets: AssetFile[] = [];
+  const workflowsUsed = new Set<string>();
 
   const emit = (key: StepKey, status: StepStatus, message?: string) =>
     onProgress({ type: "step", key, status, message });
@@ -233,6 +236,12 @@ export async function runPipeline(input: PipelineInput, onProgress: ProgressFn):
   const pushAsset = (a: AssetFile) => {
     assets.push(a);
     onProgress({ type: "asset", key: a.key, blob: a.blob, filename: a.filename });
+  };
+
+  const trackWorkflow = (slug: string) => {
+    if (workflowsUsed.has(slug)) return;
+    workflowsUsed.add(slug);
+    onProgress({ type: "workflow", slug });
   };
 
   // 1 — upload
@@ -246,6 +255,7 @@ export async function runPipeline(input: PipelineInput, onProgress: ProgressFn):
 
   // 2 — vision
   emit("vision", "running");
+  trackWorkflow("openai/gpt-4o");
   const analysis = await analyzeProduct(sourceUrl, referenceUrl, keys);
   onProgress({ type: "analysis", analysis });
   emit("vision", "done");
@@ -257,6 +267,7 @@ export async function runPipeline(input: PipelineInput, onProgress: ProgressFn):
     const cp = (analysis.cleanup_prompt || "").trim().toLowerCase();
     if (cp && cp !== "none" && cp !== "n/a") {
       emit("cleanup", "running", analysis.cleanup_prompt);
+      trackWorkflow("runflow/object-removal/prompt");
       cleanedUrl = await removeOriginalProduct(sourceUrl, analysis.cleanup_prompt, keys.runflow);
       const cleanedBlob = await downloadBlob(cleanedUrl);
       pushAsset({ key: "cleaned", label: "Cleaned source", filename: "00_cleaned.jpg", blob: cleanedBlob });
@@ -273,6 +284,7 @@ export async function runPipeline(input: PipelineInput, onProgress: ProgressFn):
   let cutoutUrl: string | null = null;
   if (needsCutout) {
     emit("cutout", "running");
+    trackWorkflow("runflow/product-isolation");
     cutoutUrl = await isolateProduct(cleanedUrl, keys.runflow);
     if (ops.has("isolate")) {
       const cutoutBlob = await downloadBlob(cutoutUrl);
@@ -293,6 +305,7 @@ export async function runPipeline(input: PipelineInput, onProgress: ProgressFn):
 
   if ((wantsWhite || wantsLifestyle) && cutoutUrl) {
     emit("scenes", "running");
+    trackWorkflow("openai/gpt-image-2/edit");
     const tasks: Promise<SceneOutput>[] = [];
 
     if (wantsWhite) {
@@ -341,6 +354,7 @@ export async function runPipeline(input: PipelineInput, onProgress: ProgressFn):
   const ratios: AspectRatio[] = uniqueRatios(platforms);
   if (ratios.length > 0 && sceneOutputs.length > 0) {
     emit("ratios", "running");
+    trackWorkflow("runflow/smart-resize");
     const resizeTasks: Array<Promise<AssetFile>> = [];
     let slot = 10;
     for (const scene of sceneOutputs) {
@@ -369,5 +383,5 @@ export async function runPipeline(input: PipelineInput, onProgress: ProgressFn):
     emit("ratios", "skipped");
   }
 
-  return { analysis, assets };
+  return { analysis, assets, workflows: Array.from(workflowsUsed) };
 }

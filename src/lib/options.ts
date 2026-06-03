@@ -119,3 +119,66 @@ export function uniqueRatios(selected: Platform[]): AspectRatio[] {
   }
   return Array.from(set);
 }
+
+// ---------- workflow metadata (for PackDetail "under the hood" links) ----------
+
+export type WorkflowMeta = {
+  label: string;
+  /** URL of the workflow / model page on runflow.io (where the user can see how it works) */
+  url: string;
+  /** When false, no Runflow page (e.g. OpenAI direct calls) */
+  external?: boolean;
+};
+
+export const WORKFLOW_META: Record<string, WorkflowMeta> = {
+  "runflow/product-isolation": {
+    label: "Product Isolation",
+    url: "https://www.runflow.io/models/runflow/product-isolation",
+  },
+  "runflow/object-removal/prompt": {
+    label: "Object Removal (Prompt)",
+    url: "https://www.runflow.io/models/runflow/object-removal/prompt",
+  },
+  "runflow/object-removal": {
+    label: "Object Removal",
+    url: "https://www.runflow.io/models/runflow/object-removal",
+  },
+  "runflow/smart-resize": {
+    label: "Smart Resize",
+    url: "https://www.runflow.io/models/runflow/smart-resize",
+  },
+  "runflow/smart-segmentation": {
+    label: "Smart Segmentation",
+    url: "https://www.runflow.io/models/runflow/smart-segmentation",
+  },
+  "runflow/outpaint/aspect-ratio": {
+    label: "Outpaint (Aspect Ratio)",
+    url: "https://www.runflow.io/models/runflow/outpaint/aspect-ratio",
+  },
+  "runflow/model-removal": {
+    label: "Model Removal",
+    url: "https://www.runflow.io/models/runflow/model-removal",
+  },
+  "runflow/background-replace": {
+    label: "Background Replace",
+    url: "https://www.runflow.io/models/runflow/background-replace",
+  },
+  "openai/gpt-image-2/edit": {
+    label: "GPT Image 2 — Edit",
+    url: "https://www.runflow.io/models/openai/gpt-image-2/edit",
+  },
+  "openai/gpt-4o": {
+    label: "GPT-4o (vision)",
+    url: "https://platform.openai.com/docs/models/gpt-4o",
+    external: true,
+  },
+};
+
+export function workflowMeta(slug: string): WorkflowMeta {
+  return (
+    WORKFLOW_META[slug] || {
+      label: slug,
+      url: `https://www.runflow.io/models/${slug}`,
+    }
+  );
+}

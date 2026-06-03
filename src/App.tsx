@@ -7,11 +7,14 @@ import { OperationPicker } from "./components/OperationPicker";
 import { PlatformPicker } from "./components/PlatformPicker";
 import { Pipeline } from "./components/Pipeline";
 import { ResultGrid } from "./components/ResultGrid";
-import { RecentPacks } from "./components/RecentPacks";
+import { HowItWorks } from "./components/HowItWorks";
+import { Tabs, type Tab } from "./components/Tabs";
+import { PacksGallery } from "./components/PacksGallery";
+import { PackDetail } from "./components/PackDetail";
 import { Lightbox, type LightboxItem } from "./components/Lightbox";
 import { loadKeys, saveKeys, type Keys } from "./lib/keys";
 import { runPipeline, type Analysis, type AssetFile, type StepKey, type StepStatus } from "./lib/pipeline";
-import { savePack, type RecentPack } from "./lib/history";
+import { savePack, listPacks, type RecentPack } from "./lib/history";
 import { buildZip } from "./lib/zip";
 import type { Operation, Platform } from "./lib/options";
 import { uniqueRatios } from "./lib/options";
@@ -62,6 +65,17 @@ export default function App() {
 
   const [lbItems, setLbItems] = useState<LightboxItem[] | null>(null);
   const [lbIndex, setLbIndex] = useState(0);
+
+  // tab state + pack-detail state
+  const [tab, setTab] = useState<Tab>("generate");
+  const [openedPack, setOpenedPack] = useState<RecentPack | null>(null);
+  const [workflowsUsed, setWorkflowsUsed] = useState<string[]>([]);
+  const [packsCount, setPacksCount] = useState(0);
+
+  // count of packs (for tab badge) — refreshed whenever recentTick bumps
+  useEffect(() => {
+    listPacks(100).then((p) => setPacksCount(p.length));
+  }, [recentTick]);
 
   // open how-to-start automatically on first ever visit (no keys yet, no prior pack)
   const firstMount = useRef(true);
@@ -139,6 +153,7 @@ export default function App() {
     setAnalysis(null);
     setAssets([]);
     setError(null);
+    setWorkflowsUsed([]);
     // revoke previous asset urls
     Object.values(assetUrls).forEach((u) => u.startsWith("blob:") && URL.revokeObjectURL(u));
     setAssetUrls({});
@@ -151,6 +166,8 @@ export default function App() {
     resetForNew();
     setSource(null);
     setReference(null);
+    setOpenedPack(null);
+    setTab("generate");
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -160,6 +177,7 @@ export default function App() {
 
     resetForNew();
     setRunning(true);
+    setTab("processing"); // auto-switch the user to the Processing tab
     const id = newJobId();
     setJobId(id);
 
@@ -170,9 +188,10 @@ export default function App() {
     setSteps({ ...INITIAL_STEPS, upload: "running" });
 
     const collected: AssetFile[] = [];
+    const workflowAcc: string[] = [];
 
     try {
-      await runPipeline(
+      const result = await runPipeline(
         { source, reference, operations, platforms, keys },
         (u) => {
           if (u.type === "step") {
@@ -184,6 +203,9 @@ export default function App() {
             collected.push({ key: u.key, blob: u.blob, filename: u.filename, label: "" });
             const blobUrl = URL.createObjectURL(u.blob);
             setAssetUrls((prev) => ({ ...prev, [u.key]: blobUrl }));
+          } else if (u.type === "workflow") {
+            workflowAcc.push(u.slug);
+            setWorkflowsUsed((prev) => (prev.includes(u.slug) ? prev : [...prev, u.slug]));
           }
         }
       );
@@ -196,18 +218,23 @@ export default function App() {
       const zipBlob = await buildZip(finalAssets);
       setZipUrl(URL.createObjectURL(zipBlob));
 
-      // persist to history (use white studio as thumbnail, or first lifestyle)
-      const thumbAsset = finalAssets.find((a) => a.key === "life_a") || finalAssets.find((a) => a.key === "white") || finalAssets[0];
+      // persist to history (use white studio as thumbnail, or first lifestyle, or cutout)
+      const thumbAsset =
+        finalAssets.find((a) => a.key === "life_a") ||
+        finalAssets.find((a) => a.key === "white") ||
+        finalAssets.find((a) => a.key === "cutout") ||
+        finalAssets[0];
       if (thumbAsset) {
         const pack: RecentPack = {
           id,
           createdAt: Date.now(),
-          product: (analysis?.product) || (await collectedAnalysisProduct()) || "Brand pack",
+          product: (analysis?.product) || (await collectedAnalysisProduct()) || "Pack",
           category: analysis?.category || "",
           analysis: analysis as Analysis,
           thumb: thumbAsset.blob,
           thumbName: thumbAsset.filename,
           assets: finalAssets.map((a) => ({ key: a.key, label: a.label, filename: a.filename, blob: a.blob })),
+          workflows: result.workflows || workflowAcc,
         };
         await savePack(pack);
         setRecentTick((t) => t + 1);
@@ -231,24 +258,14 @@ export default function App() {
   // (analysis state may not be flushed yet inside the same tick — fall back gracefully)
   const collectedAnalysisProduct = async () => analysis?.product || "";
 
-  const onOpenRecent = async (pack: RecentPack) => {
-    resetForNew();
-    setJobId(pack.id);
-    setAnalysis(pack.analysis);
-    setSteps({
-      upload: "done",
-      vision: "done",
-      cleanup: pack.analysis?.cleanup_prompt && pack.analysis.cleanup_prompt !== "none" ? "done" : "skipped",
-      cutout: "done",
-      scenes: "done",
-      ratios: "done",
-    });
-    const urls: Record<string, string> = {};
-    pack.assets.forEach((a) => { urls[a.key] = URL.createObjectURL(a.blob); });
-    setAssetUrls(urls);
-    setAssets(pack.assets.map((a) => ({ key: a.key, label: a.label, filename: a.filename, blob: a.blob })));
-    const zipBlob = await buildZip(pack.assets);
-    setZipUrl(URL.createObjectURL(zipBlob));
+  const onOpenRecent = (pack: RecentPack) => {
+    setOpenedPack(pack);
+    setTab("packs");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const onClosePackDetail = () => {
+    setOpenedPack(null);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -260,100 +277,152 @@ export default function App() {
         onOpenHowToStart={() => setHowToOpen(true)}
       />
 
-      <section className="mb-9">
+      <section className="mb-7">
         <div className="font-mono uppercase tracking-widest text-[11px] text-amber font-bold mb-2.5">
-          Runflow template · v0.2
+          Runflow template · v0.3
         </div>
-        <h1 className="font-bold text-[36px] leading-[1.1] tracking-tight mb-2.5">
+        <h1 className="font-bold text-[34px] leading-[1.1] tracking-tight mb-2.5">
           Upload one supplier photo. Pick what to do. Get a store-ready pack.
         </h1>
-        <p className="text-ink-2 text-sm leading-relaxed max-w-[820px]">
-          Drop any product image. Pick the operations you want — isolate, remove objects,
-          replace background, generate lifestyle scenes. Pick where you'll publish —
-          TikTok, Instagram, Pinterest, Amazon. We fan out to every selected aspect ratio
-          via Runflow's smart-resize and pack everything into a ZIP. Pay-as-you-go via
-          your own Runflow + OpenAI keys.
-        </p>
       </section>
 
-      <RecentPacks refreshKey={recentTick} onOpen={onOpenRecent} onNew={onNewPack} />
+      <Tabs active={tab} onChange={setTab} processing={running} packsCount={packsCount} />
 
-      <section className="mb-10 space-y-7">
-        {/* 1 — source image (+ optional reference) */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          <Dropzone
-            label="1 · Supplier image"
-            required
-            hint="Drop the supplier photo"
-            subHint="Any AliExpress / 1688 / Alibaba / supplier image you saved"
-            file={source}
-            onChange={setSource}
-          />
-          <Dropzone
-            label="2 · Reference style"
-            hint="Match the look of an ad you like"
-            subHint="Save a frame from a Meta / TikTok / IG ad you want to mimic. We'll match its lighting, palette, mood for the lifestyle scenes. Skip for AI-picked scenes."
-            file={reference}
-            onChange={setReference}
-          />
-        </div>
+      {/* === TAB 1 — GENERATE === */}
+      {tab === "generate" ? (
+        <>
+          <HowItWorks />
 
-        {/* 3 — operations */}
-        <div>
-          <div className="flex items-end justify-between mb-3">
-            <div>
-              <div className="font-mono uppercase tracking-wider text-[11px] text-muted font-semibold mb-0.5">
-                3 · What to do
-              </div>
-              <div className="text-[12px] text-ink-2">
-                Pick one or more. Mask-based operations auto-detect their region via{" "}
-                <code className="bg-panel-2 px-1.5 py-0.5 rounded font-mono text-[10px] text-amber">runflow/smart-segmentation</code>{" "}— no manual masking.
-              </div>
+          <section className="mb-10 space-y-7">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              <Dropzone
+                label="1 · Supplier image"
+                required
+                hint="Drop the supplier photo"
+                subHint="Any AliExpress / 1688 / Alibaba / supplier image you saved"
+                file={source}
+                onChange={setSource}
+              />
+              <Dropzone
+                label="2 · Reference style"
+                hint="Match the look of an ad you like"
+                subHint="Save a frame from a Meta / TikTok / IG ad you want to mimic. We'll match its lighting, palette, mood for the lifestyle scenes. Skip for AI-picked scenes."
+                file={reference}
+                onChange={setReference}
+              />
             </div>
-          </div>
-          <OperationPicker selected={operations} onChange={setOperations} />
-        </div>
 
-        {/* 4 — platforms */}
-        <div>
-          <div className="flex items-end justify-between mb-3">
             <div>
-              <div className="font-mono uppercase tracking-wider text-[11px] text-muted font-semibold mb-0.5">
-                4 · Where you'll publish
+              <div className="flex items-end justify-between mb-3">
+                <div>
+                  <div className="font-mono uppercase tracking-wider text-[11px] text-muted font-semibold mb-0.5">
+                    3 · What to do
+                  </div>
+                  <div className="text-[12px] text-ink-2">
+                    Pick one or more. Mask-based ops auto-detect their region via{" "}
+                    <code className="bg-panel-2 px-1.5 py-0.5 rounded font-mono text-[10px] text-amber">
+                      runflow/smart-segmentation
+                    </code>{" "}— no manual masking.
+                  </div>
+                </div>
               </div>
-              <div className="text-[12px] text-ink-2">
-                Each picked platform's aspect ratios run through{" "}
-                <code className="bg-panel-2 px-1.5 py-0.5 rounded font-mono text-[10px] text-amber">runflow/smart-resize</code>{" "}— one zip with every variant. Skip to keep base 1:1 only.
-              </div>
+              <OperationPicker selected={operations} onChange={setOperations} />
             </div>
-          </div>
-          <PlatformPicker selected={platforms} onChange={setPlatforms} />
-        </div>
 
-        <div className="flex items-center gap-3.5">
-          <button
-            onClick={onRun}
-            disabled={!ready}
-            className="px-5 py-3 bg-ink hover:bg-amber text-white text-sm font-semibold rounded-md transition-colors shadow-soft disabled:bg-faint disabled:cursor-not-allowed"
-          >
-            Generate pack →
-          </button>
-          <span className="text-muted text-xs">{ctaHint}</span>
-        </div>
-      </section>
+            <div>
+              <div className="flex items-end justify-between mb-3">
+                <div>
+                  <div className="font-mono uppercase tracking-wider text-[11px] text-muted font-semibold mb-0.5">
+                    4 · Where you'll publish
+                  </div>
+                  <div className="text-[12px] text-ink-2">
+                    Each picked platform's aspect ratios run through{" "}
+                    <code className="bg-panel-2 px-1.5 py-0.5 rounded font-mono text-[10px] text-amber">
+                      runflow/smart-resize
+                    </code>{" "}— one zip with every variant. Skip to keep base 1:1 only.
+                  </div>
+                </div>
+              </div>
+              <PlatformPicker selected={platforms} onChange={setPlatforms} />
+            </div>
 
-      {jobId ? (
-        <Pipeline steps={steps} analysis={analysis} assetUrls={assetUrls} onZoom={onZoom} />
+            <div className="flex items-center gap-3.5">
+              <button
+                onClick={onRun}
+                disabled={!ready}
+                className="px-5 py-3 bg-ink hover:bg-amber text-white text-sm font-semibold rounded-md transition-colors shadow-soft disabled:bg-faint disabled:cursor-not-allowed"
+              >
+                Generate pack →
+              </button>
+              <span className="text-muted text-xs">{ctaHint}</span>
+            </div>
+          </section>
+        </>
       ) : null}
 
-      {error ? (
-        <section className="mb-10 bg-red-soft border border-red/30 rounded-[10px] p-5">
-          <h2 className="text-red font-semibold mb-2">Pipeline failed</h2>
-          <pre className="font-mono text-xs text-red whitespace-pre-wrap m-0">{error}</pre>
+      {/* === TAB 2 — PROCESSING === */}
+      {tab === "processing" ? (
+        <section className="mb-10">
+          <div className="mb-5">
+            <h2 className="text-lg font-semibold mb-1">
+              {running ? "Building your pack…" : error ? "Pipeline failed" : "Pack ready"}
+            </h2>
+            <p className="text-xs text-muted">
+              {running
+                ? "Hold tight — this tab updates live as each step finishes."
+                : error
+                ? "Something went wrong mid-run. Details below."
+                : "All assets generated. Download below or jump to your collection."}
+            </p>
+          </div>
+
+          {jobId ? (
+            <Pipeline steps={steps} analysis={analysis} assetUrls={assetUrls} onZoom={onZoom} />
+          ) : null}
+
+          {error ? (
+            <section className="mb-10 bg-red-soft border border-red/30 rounded-[10px] p-5">
+              <h2 className="text-red font-semibold mb-2">Pipeline failed</h2>
+              <pre className="font-mono text-xs text-red whitespace-pre-wrap m-0">{error}</pre>
+            </section>
+          ) : null}
+
+          {!running && assets.length > 0 ? (
+            <>
+              <ResultGrid
+                assets={assets}
+                assetUrls={assetUrls}
+                zipUrl={zipUrl}
+                jobId={jobId}
+                onZoom={onZoom}
+              />
+              <div className="flex gap-3 mt-2">
+                <button
+                  onClick={() => setTab("packs")}
+                  className="inline-flex items-center gap-2 px-4 py-2.5 bg-ink hover:bg-amber text-white text-sm font-semibold rounded-md transition-colors shadow-soft"
+                >
+                  View in Packs collection →
+                </button>
+                <button
+                  onClick={onNewPack}
+                  className="inline-flex items-center gap-2 px-4 py-2.5 text-ink-2 hover:bg-panel-2 text-sm font-semibold rounded-md transition-colors"
+                >
+                  Generate another
+                </button>
+              </div>
+            </>
+          ) : null}
         </section>
       ) : null}
 
-      <ResultGrid assets={assets} assetUrls={assetUrls} zipUrl={zipUrl} jobId={jobId} onZoom={onZoom} />
+      {/* === TAB 3 — PACKS COLLECTION === */}
+      {tab === "packs" ? (
+        openedPack ? (
+          <PackDetail pack={openedPack} onClose={onClosePackDetail} onZoom={onZoom} />
+        ) : (
+          <PacksGallery refreshKey={recentTick} onOpen={onOpenRecent} onNew={onNewPack} />
+        )
+      ) : null}
 
       <footer className="text-muted text-xs border-t border-line pt-5 mt-16">
         Runflow · Replit template · forks live in your browser only — no servers, no DB,
