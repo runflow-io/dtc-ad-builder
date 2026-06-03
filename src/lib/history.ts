@@ -30,6 +30,8 @@ export type RecentPack = {
   analysis: Analysis;
   thumb: Blob;          // representative thumbnail
   thumbName: string;
+  /** Original supplier photo (post-crop, if cropped). Optional so old packs still load. */
+  source?: { blob: Blob; filename: string };
   assets: { key: string; label: string; description?: string; filename: string; blob: Blob }[];
   /** Runflow / OpenAI workflow slugs that ran for this pack (for "under the hood" links) */
   workflows?: string[];

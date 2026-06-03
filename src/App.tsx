@@ -271,6 +271,7 @@ export default function App() {
           analysis: analysis as Analysis,
           thumb: thumbAsset.blob,
           thumbName: thumbAsset.filename,
+          source: source ? { blob: source, filename: source.name || "supplier.jpg" } : undefined,
           assets: finalAssets.map((a) => ({
             key: a.key,
             label: a.label,

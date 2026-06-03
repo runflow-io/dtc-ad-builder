@@ -1,4 +1,4 @@
-import { ArrowLeft, ExternalLink, Download, Info } from "lucide-react";
+import { ArrowLeft, ExternalLink, Download, Info, Image as ImageIcon } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { workflowMeta } from "../lib/options";
 import { groupAssets } from "../lib/categories";
@@ -15,6 +15,7 @@ type Props = {
 
 export function PackDetail({ pack, onClose, onZoom }: Props) {
   const [assetUrls, setAssetUrls] = useState<Record<string, string>>({});
+  const [sourceUrl, setSourceUrl] = useState<string>("");
   const [zipUrl, setZipUrl] = useState<string>("");
 
   useEffect(() => {
@@ -23,6 +24,8 @@ export function PackDetail({ pack, onClose, onZoom }: Props) {
       urls[a.key] = URL.createObjectURL(a.blob);
     }
     setAssetUrls(urls);
+    const sUrl = pack.source ? URL.createObjectURL(pack.source.blob) : "";
+    setSourceUrl(sUrl);
     (async () => {
       try {
         const z = await buildZip(pack.assets);
@@ -33,6 +36,7 @@ export function PackDetail({ pack, onClose, onZoom }: Props) {
     })();
     return () => {
       Object.values(urls).forEach((u) => URL.revokeObjectURL(u));
+      if (sUrl) URL.revokeObjectURL(sUrl);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pack.id]);
@@ -41,10 +45,19 @@ export function PackDetail({ pack, onClose, onZoom }: Props) {
 
   // Build a stable, ordered list of LightboxItems for THIS pack so the
   // global lightbox can step through the right URLs (App.tsx's assetUrls
-  // are scoped to the live pipeline run, not historical packs).
+  // are scoped to the live pipeline run, not historical packs). The
+  // original supplier photo (if saved) leads the carousel.
   const lightboxItems: LightboxItem[] = useMemo(() => {
     const items: LightboxItem[] = [];
     const seen = new Set<string>();
+    if (sourceUrl && pack.source) {
+      items.push({
+        src: sourceUrl,
+        label: "Supplier image (original)",
+        filename: `runflow-pack-${pack.id}-source-${pack.source.filename}`,
+      });
+      seen.add(sourceUrl);
+    }
     for (const a of pack.assets) {
       const src = assetUrls[a.key];
       if (!src || seen.has(src)) continue;
@@ -52,12 +65,17 @@ export function PackDetail({ pack, onClose, onZoom }: Props) {
       items.push({ src, label: a.label, filename: `runflow-pack-${pack.id}-${a.filename}` });
     }
     return items;
-  }, [pack.assets, pack.id, assetUrls]);
+  }, [pack.assets, pack.id, pack.source, assetUrls, sourceUrl]);
 
   const handleZoom = (clickedSrc: string) => {
     if (!lightboxItems.length) return;
     const idx = Math.max(0, lightboxItems.findIndex((i) => i.src === clickedSrc));
     onZoom(lightboxItems, idx);
+  };
+
+  const openOriginal = () => {
+    if (!sourceUrl) return;
+    onZoom(lightboxItems, 0);
   };
 
   return (
@@ -143,6 +161,27 @@ export function PackDetail({ pack, onClose, onZoom }: Props) {
           </div>
         )}
       </div>
+
+      {/* original supplier photo — CTA opens lightbox at index 0 */}
+      {sourceUrl ? (
+        <div className="mb-5">
+          <button
+            type="button"
+            onClick={openOriginal}
+            className="inline-flex items-center gap-3 pl-1.5 pr-4 py-1.5 bg-panel border border-line hover:border-amber-border hover:shadow-soft rounded-full transition-all group"
+          >
+            <img
+              src={sourceUrl}
+              alt="Original supplier photo"
+              className="w-10 h-10 rounded-full object-cover border border-line"
+            />
+            <span className="flex items-center gap-1.5 text-[13px] font-semibold text-ink-2 group-hover:text-amber">
+              <ImageIcon className="w-3.5 h-3.5" />
+              View original supplier image
+            </span>
+          </button>
+        </div>
+      ) : null}
 
       {/* grouped asset sections */}
       <div className="grid grid-cols-12 gap-x-6 gap-y-8 mb-10">
