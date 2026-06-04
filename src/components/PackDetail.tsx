@@ -19,6 +19,7 @@ type Props = {
 export function PackDetail({ pack, onClose, onZoom, onExtend, extending }: Props) {
   const [assetUrls, setAssetUrls] = useState<Record<string, string>>({});
   const [sourceUrl, setSourceUrl] = useState<string>("");
+  const [originalSourceUrl, setOriginalSourceUrl] = useState<string>("");
   const [zipUrl, setZipUrl] = useState<string>("");
 
   useEffect(() => {
@@ -28,7 +29,9 @@ export function PackDetail({ pack, onClose, onZoom, onExtend, extending }: Props
     }
     setAssetUrls(urls);
     const sUrl = pack.source ? URL.createObjectURL(pack.source.blob) : "";
+    const oUrl = pack.originalSource ? URL.createObjectURL(pack.originalSource.blob) : "";
     setSourceUrl(sUrl);
+    setOriginalSourceUrl(oUrl);
     (async () => {
       try {
         const z = await buildZip(pack.assets);
@@ -40,6 +43,7 @@ export function PackDetail({ pack, onClose, onZoom, onExtend, extending }: Props
     return () => {
       Object.values(urls).forEach((u) => URL.revokeObjectURL(u));
       if (sUrl) URL.revokeObjectURL(sUrl);
+      if (oUrl) URL.revokeObjectURL(oUrl);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pack.id]);
@@ -49,14 +53,23 @@ export function PackDetail({ pack, onClose, onZoom, onExtend, extending }: Props
   // Build a stable, ordered list of LightboxItems for THIS pack so the
   // global lightbox can step through the right URLs (App.tsx's assetUrls
   // are scoped to the live pipeline run, not historical packs). The
-  // original supplier photo (if saved) leads the carousel.
+  // pre-crop original (if saved) leads, then the cropped supplier image
+  // (what the pipeline actually used), then the generated assets.
   const lightboxItems: LightboxItem[] = useMemo(() => {
     const items: LightboxItem[] = [];
     const seen = new Set<string>();
-    if (sourceUrl && pack.source) {
+    if (originalSourceUrl && pack.originalSource) {
+      items.push({
+        src: originalSourceUrl,
+        label: "Original upload (pre-crop)",
+        filename: `runflow-pack-${pack.id}-original-${pack.originalSource.filename}`,
+      });
+      seen.add(originalSourceUrl);
+    }
+    if (sourceUrl && pack.source && !seen.has(sourceUrl)) {
       items.push({
         src: sourceUrl,
-        label: "Supplier image (original)",
+        label: pack.originalSource ? "Cropped supplier image" : "Supplier image",
         filename: `runflow-pack-${pack.id}-source-${pack.source.filename}`,
       });
       seen.add(sourceUrl);
@@ -68,7 +81,7 @@ export function PackDetail({ pack, onClose, onZoom, onExtend, extending }: Props
       items.push({ src, label: a.label, filename: `runflow-pack-${pack.id}-${a.filename}` });
     }
     return items;
-  }, [pack.assets, pack.id, pack.source, assetUrls, sourceUrl]);
+  }, [pack.assets, pack.id, pack.source, pack.originalSource, assetUrls, sourceUrl, originalSourceUrl]);
 
   const handleZoom = (clickedSrc: string) => {
     if (!lightboxItems.length) return;
@@ -76,9 +89,10 @@ export function PackDetail({ pack, onClose, onZoom, onExtend, extending }: Props
     onZoom(lightboxItems, idx);
   };
 
-  const openOriginal = () => {
-    if (!sourceUrl) return;
-    onZoom(lightboxItems, 0);
+  const openAtUrl = (url: string) => {
+    if (!url) return;
+    const idx = Math.max(0, lightboxItems.findIndex((i) => i.src === url));
+    onZoom(lightboxItems, idx);
   };
 
   return (
@@ -182,24 +196,44 @@ export function PackDetail({ pack, onClose, onZoom, onExtend, extending }: Props
         )}
       </div>
 
-      {/* original supplier photo — CTA opens lightbox at index 0 */}
-      {sourceUrl ? (
-        <div className="mb-5">
-          <button
-            type="button"
-            onClick={openOriginal}
-            className="inline-flex items-center gap-3 pl-1.5 pr-4 py-1.5 bg-panel border border-line hover:border-amber-border hover:shadow-soft rounded-full transition-all group"
-          >
-            <img
-              src={sourceUrl}
-              alt="Original supplier photo"
-              className="w-10 h-10 rounded-full object-cover border border-line"
-            />
-            <span className="flex items-center gap-1.5 text-[13px] font-semibold text-ink-2 group-hover:text-amber">
-              <ImageIcon className="w-3.5 h-3.5" />
-              View original supplier image
-            </span>
-          </button>
+      {/* supplier photo chips — show both the cropped version (used by the
+          pipeline) and the pre-crop original when both exist. */}
+      {sourceUrl || originalSourceUrl ? (
+        <div className="mb-5 flex flex-wrap items-center gap-2">
+          {sourceUrl ? (
+            <button
+              type="button"
+              onClick={() => openAtUrl(sourceUrl)}
+              className="inline-flex items-center gap-3 pl-1.5 pr-4 py-1.5 bg-panel border border-line hover:border-amber-border hover:shadow-soft rounded-full transition-all group"
+            >
+              <img
+                src={sourceUrl}
+                alt="Supplier photo used by the pipeline"
+                className="w-10 h-10 rounded-full object-cover border border-line"
+              />
+              <span className="flex items-center gap-1.5 text-[13px] font-semibold text-ink-2 group-hover:text-amber">
+                <ImageIcon className="w-3.5 h-3.5" />
+                {pack.originalSource ? "View cropped supplier image" : "View supplier image"}
+              </span>
+            </button>
+          ) : null}
+          {originalSourceUrl ? (
+            <button
+              type="button"
+              onClick={() => openAtUrl(originalSourceUrl)}
+              className="inline-flex items-center gap-3 pl-1.5 pr-4 py-1.5 bg-panel border border-line hover:border-amber-border hover:shadow-soft rounded-full transition-all group"
+            >
+              <img
+                src={originalSourceUrl}
+                alt="Original supplier photo before crop"
+                className="w-10 h-10 rounded-full object-cover border border-line"
+              />
+              <span className="flex items-center gap-1.5 text-[13px] font-semibold text-ink-2 group-hover:text-amber">
+                <ImageIcon className="w-3.5 h-3.5" />
+                View original supplier image
+              </span>
+            </button>
+          ) : null}
         </div>
       ) : null}
 

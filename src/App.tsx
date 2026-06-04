@@ -47,13 +47,17 @@ export default function App() {
   const [productTourOpen, setProductTourOpen] = useState(false);
 
   const [source, setSource] = useState<File | null>(null);
+  // Pre-crop version of the supplier image — kept so the saved pack carries
+  // both the cropped (what the pipeline used) and the untouched original.
+  // Null when no crop has been applied to the current source.
+  const [originalSource, setOriginalSource] = useState<File | null>(null);
   const [reference, setReference] = useState<File | null>(null);
 
   // File pending the crop modal — supplier-image drops auto-open it, the
   // "Crop" button on the preview re-opens it on the current source.
   const [pendingCrop, setPendingCrop] = useState<File | null>(null);
   const handleSourceUpload = (f: File | null) => {
-    if (!f) { setSource(null); return; }
+    if (!f) { setSource(null); setOriginalSource(null); return; }
     setPendingCrop(f);
   };
 
@@ -107,6 +111,7 @@ export default function App() {
     kind: "new";
     id: string;
     source: File;
+    originalSource: File | null;
     reference: File | null;
     operations: Operation[];
     platforms: Platform[];
@@ -260,6 +265,7 @@ export default function App() {
       kind: "new",
       id: newJobId(),
       source,
+      originalSource,
       reference,
       operations: [...operations],
       platforms: [...platforms],
@@ -377,6 +383,9 @@ export default function App() {
           thumb: thumbAsset.blob,
           thumbName: thumbAsset.filename,
           source: { blob: job.source, filename: job.source.name || "supplier.jpg" },
+          originalSource: job.originalSource
+            ? { blob: job.originalSource, filename: job.originalSource.name || "supplier-original.jpg" }
+            : undefined,
           assets: finalAssets.map((a) => ({
             key: a.key,
             label: a.label,
@@ -797,7 +806,14 @@ export default function App() {
       {pendingCrop ? (
         <CropperModal
           file={pendingCrop}
-          onConfirm={(f) => { setSource(f); setPendingCrop(null); }}
+          onConfirm={(f) => {
+            // CropperModal returns the original File unchanged when the user
+            // picks "Use original" — same reference means no crop happened.
+            const wasCropped = f !== pendingCrop;
+            setSource(f);
+            setOriginalSource(wasCropped ? pendingCrop : null);
+            setPendingCrop(null);
+          }}
           onCancel={() => setPendingCrop(null)}
         />
       ) : null}
