@@ -1,4 +1,4 @@
-import { ArrowLeft, ExternalLink, Download, Info, Image as ImageIcon } from "lucide-react";
+import { ArrowLeft, ExternalLink, Download, Info, Image as ImageIcon, Plus, Loader2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { workflowMeta } from "../lib/options";
 import { groupAssets } from "../lib/categories";
@@ -11,9 +11,12 @@ type Props = {
   pack: RecentPack;
   onClose: () => void;
   onZoom: ZoomFn;
+  onExtend?: () => void;
+  /** True if an extend job is currently running for THIS pack. */
+  extending?: boolean;
 };
 
-export function PackDetail({ pack, onClose, onZoom }: Props) {
+export function PackDetail({ pack, onClose, onZoom, onExtend, extending }: Props) {
   const [assetUrls, setAssetUrls] = useState<Record<string, string>>({});
   const [sourceUrl, setSourceUrl] = useState<string>("");
   const [zipUrl, setZipUrl] = useState<string>("");
@@ -89,16 +92,33 @@ export function PackDetail({ pack, onClose, onZoom }: Props) {
           <ArrowLeft className="w-4 h-4" />
           Back to collection
         </button>
-        {zipUrl ? (
-          <a
-            href={zipUrl}
-            download={`runflow-pack-${pack.id}.zip`}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-ink hover:bg-amber text-white text-sm font-semibold rounded-md transition-colors shadow-soft"
-          >
-            <Download className="w-3.5 h-3.5" />
-            Download all (zip)
-          </a>
-        ) : null}
+        <div className="flex items-center gap-2">
+          {onExtend ? (
+            <button
+              type="button"
+              onClick={onExtend}
+              disabled={extending}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-panel border border-line hover:border-amber-border hover:text-amber text-sm font-semibold text-ink-2 rounded-md transition-colors shadow-soft disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {extending ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin-slow" />
+              ) : (
+                <Plus className="w-3.5 h-3.5" />
+              )}
+              {extending ? "Extending…" : "Add more formats"}
+            </button>
+          ) : null}
+          {zipUrl ? (
+            <a
+              href={zipUrl}
+              download={`runflow-pack-${pack.id}.zip`}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-ink hover:bg-amber text-white text-sm font-semibold rounded-md transition-colors shadow-soft"
+            >
+              <Download className="w-3.5 h-3.5" />
+              Download all (zip)
+            </a>
+          ) : null}
+        </div>
       </div>
 
       {/* product header */}

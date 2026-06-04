@@ -16,8 +16,9 @@ import { Lightbox, type LightboxItem } from "./components/Lightbox";
 import { CropperModal } from "./components/CropperModal";
 import { WorkflowsDrawer } from "./components/WorkflowsDrawer";
 import { ProductTourModal } from "./components/ProductTourModal";
+import { ExtendDrawer } from "./components/ExtendDrawer";
 import { loadKeys, saveKeys, type Keys } from "./lib/keys";
-import { runPipeline, type Analysis, type AssetFile, type StepKey, type StepStatus } from "./lib/pipeline";
+import { runPipeline, runExtendPipeline, type Analysis, type AssetFile, type StepKey, type StepStatus } from "./lib/pipeline";
 import { savePack, listPacks, type RecentPack } from "./lib/history";
 import { buildZip } from "./lib/zip";
 import type { Operation, Platform } from "./lib/options";
@@ -102,16 +103,29 @@ export default function App() {
 
   // FIFO queue — clicking Generate enqueues a snapshot; the drainer runs
   // jobs one at a time so the user can stack work while one's in progress.
-  type QueueJob = {
+  type QueueJobNew = {
+    kind: "new";
     id: string;
     source: File;
     reference: File | null;
     operations: Operation[];
     platforms: Platform[];
   };
+  type QueueJobExtend = {
+    kind: "extend";
+    id: string;
+    pack: RecentPack;
+    addOperations: Operation[];
+    addPlatforms: Platform[];
+    reference: File | null;
+  };
+  type QueueJob = QueueJobNew | QueueJobExtend;
   const [queue, setQueue] = useState<QueueJob[]>([]);
   const queueRef = useRef<QueueJob[]>([]);
   const drainingRef = useRef(false);
+  /** Pack id currently being extended, if any — used to disable repeat clicks. */
+  const [extendingPackId, setExtendingPackId] = useState<string | null>(null);
+  const [extendDrawerPack, setExtendDrawerPack] = useState<RecentPack | null>(null);
 
   const [lbItems, setLbItems] = useState<LightboxItem[] | null>(null);
   const [lbIndex, setLbIndex] = useState(0);
@@ -243,6 +257,7 @@ export default function App() {
     if (!source) return;
     if (!keysOk) { setSettingsOpen(true); return; }
     const job: QueueJob = {
+      kind: "new",
       id: newJobId(),
       source,
       reference,
@@ -252,6 +267,24 @@ export default function App() {
     queueRef.current = [...queueRef.current, job];
     setQueue(queueRef.current);
     setTab("processing");
+    void drainQueue();
+  };
+
+  const enqueueExtend = (
+    pack: RecentPack,
+    add: { addOperations: Operation[]; addPlatforms: Platform[]; reference: File | null }
+  ) => {
+    if (!keysOk) { setSettingsOpen(true); return; }
+    const job: QueueJob = {
+      kind: "extend",
+      id: newJobId(),
+      pack,
+      addOperations: add.addOperations,
+      addPlatforms: add.addPlatforms,
+      reference: add.reference,
+    };
+    queueRef.current = [...queueRef.current, job];
+    setQueue(queueRef.current);
     void drainQueue();
   };
 
@@ -271,6 +304,11 @@ export default function App() {
   };
 
   const executeJob = async (job: QueueJob) => {
+    if (job.kind === "extend") {
+      await executeExtendJob(job);
+      return;
+    }
+
     resetForNew();
     setRunning(true);
     setJobId(job.id);
@@ -364,6 +402,104 @@ export default function App() {
       });
     } finally {
       setRunning(false);
+    }
+  };
+
+  // Extend job: merge new assets into an existing pack and save it back.
+  const executeExtendJob = async (job: QueueJobExtend) => {
+    resetForNew();
+    setRunning(true);
+    setJobId(job.id);
+    setExtendingPackId(job.pack.id);
+    setSteps({ ...INITIAL_STEPS, upload: "running" });
+
+    // Seed assetUrls with the existing pack so the Pipeline view doesn't look
+    // empty for steps we're skipping.
+    const seeded: Record<string, string> = {};
+    for (const a of job.pack.assets) seeded[a.key] = URL.createObjectURL(a.blob);
+    if (job.pack.source) seeded.__source = URL.createObjectURL(job.pack.source.blob);
+    setAssetUrls(seeded);
+
+    const collectedNew: AssetFile[] = [];
+    const workflowAcc: string[] = [];
+
+    try {
+      const result = await runExtendPipeline(
+        {
+          pack: job.pack,
+          addOperations: job.addOperations,
+          addPlatforms: job.addPlatforms,
+          reference: job.reference,
+          keys,
+        },
+        (u) => {
+          if (u.type === "step") {
+            setSteps((prev) => ({ ...prev, [u.key]: u.status }));
+          } else if (u.type === "analysis") {
+            setAnalysis(u.analysis);
+          } else if (u.type === "asset") {
+            collectedNew.push({
+              key: u.key,
+              label: u.label,
+              description: u.description,
+              blob: u.blob,
+              filename: u.filename,
+            });
+            const blobUrl = URL.createObjectURL(u.blob);
+            setAssetUrls((prev) => ({ ...prev, [u.key]: blobUrl }));
+          } else if (u.type === "workflow") {
+            workflowAcc.push(u.slug);
+            setWorkflowsUsed((prev) => (prev.includes(u.slug) ? prev : [...prev, u.slug]));
+          }
+        }
+      );
+
+      // Merge: dedupe by key (new wins over old for the same key, e.g. if user
+      // somehow re-ran an op that existed — extend pipeline should already skip,
+      // but this protects against drift).
+      const byKey = new Map<string, RecentPack["assets"][number]>();
+      for (const a of job.pack.assets) byKey.set(a.key, a);
+      for (const a of collectedNew) {
+        byKey.set(a.key, { key: a.key, label: a.label, description: a.description, filename: a.filename, blob: a.blob });
+      }
+      const mergedAssets = Array.from(byKey.values());
+
+      const mergedWorkflows = Array.from(
+        new Set([...(job.pack.workflows || []), ...(result.workflows || workflowAcc)])
+      );
+
+      const newThumb =
+        mergedAssets.find((a) => a.key === "life_a") ||
+        mergedAssets.find((a) => a.key === "white") ||
+        mergedAssets.find((a) => a.key === "cutout") ||
+        mergedAssets[0];
+
+      const updatedPack: RecentPack = {
+        ...job.pack,
+        thumb: newThumb?.blob || job.pack.thumb,
+        thumbName: newThumb?.filename || job.pack.thumbName,
+        assets: mergedAssets,
+        workflows: mergedWorkflows,
+      };
+      await savePack(updatedPack);
+      setRecentTick((t) => t + 1);
+
+      // If the user is currently viewing this pack, swap the in-memory copy
+      // so the grid + lightbox refresh with the new variants.
+      setOpenedPack((cur) => (cur && cur.id === updatedPack.id ? updatedPack : cur));
+    } catch (err: any) {
+      const msg = err?.message || String(err);
+      setError(msg);
+      setSteps((prev) => {
+        const next = { ...prev };
+        (Object.keys(next) as StepKey[]).forEach((k) => {
+          if (next[k] === "running") next[k] = "failed";
+        });
+        return next;
+      });
+    } finally {
+      setRunning(false);
+      setExtendingPackId(null);
     }
   };
 
@@ -610,7 +746,13 @@ export default function App() {
       {/* === TAB 3 — PACKS COLLECTION === */}
       {tab === "packs" ? (
         openedPack ? (
-          <PackDetail pack={openedPack} onClose={onClosePackDetail} onZoom={onZoom} />
+          <PackDetail
+            pack={openedPack}
+            onClose={onClosePackDetail}
+            onZoom={onZoom}
+            onExtend={() => setExtendDrawerPack(openedPack)}
+            extending={extendingPackId === openedPack.id}
+          />
         ) : (
           <PacksGallery
             refreshKey={recentTick}
@@ -663,6 +805,19 @@ export default function App() {
       <WorkflowsDrawer open={workflowsOpen} onClose={() => setWorkflowsOpen(false)} />
 
       <ProductTourModal open={productTourOpen} onClose={() => setProductTourOpen(false)} />
+
+      <ExtendDrawer
+        open={!!extendDrawerPack}
+        pack={extendDrawerPack}
+        busy={!!extendDrawerPack && extendingPackId === extendDrawerPack.id}
+        onClose={() => setExtendDrawerPack(null)}
+        onConfirm={(input) => {
+          if (!extendDrawerPack) return;
+          enqueueExtend(extendDrawerPack, input);
+          setExtendDrawerPack(null);
+          setTab("processing");
+        }}
+      />
     </div>
   );
 }

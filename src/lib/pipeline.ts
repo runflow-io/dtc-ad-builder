@@ -553,3 +553,247 @@ export async function runPipeline(input: PipelineInput, onProgress: ProgressFn):
 
   return { analysis, assets, workflows: Array.from(workflowsUsed) };
 }
+
+// ===== EXTEND PIPELINE =====
+//
+// Adds new operations and/or new platform ratios to an existing pack. Reuses
+// what's already there:
+//   - existing cutout → skip product-isolation
+//   - existing cleaned → skip object-removal
+//   - existing analysis → skip vision
+//   - existing scenes (white / life_*) → only generate the new ones
+//   - existing ratio variants → only fan-out the missing (scene × ratio) pairs
+//
+// Same pack id → savePack overwrites the record. Caller is responsible for
+// passing the merged-asset list into savePack.
+
+export type ExtendInput = {
+  /** A frozen snapshot of the pack at the moment the user clicked "Add more". */
+  pack: {
+    id: string;
+    analysis: Analysis;
+    source?: { blob: Blob; filename: string };
+    assets: { key: string; blob: Blob; filename: string; label: string; description?: string }[];
+  };
+  /** Operations to add. Already-present operations are silently skipped. */
+  addOperations: Operation[];
+  /** Platforms to add. Already-present ratios are silently skipped. */
+  addPlatforms: Platform[];
+  /** Reference style image — required if lifestyle_scenes is among addOperations and the pack has none. */
+  reference: File | null;
+  keys: Keys;
+};
+
+function existingRatios(packAssets: { key: string }[]): Set<AspectRatio> {
+  const set = new Set<AspectRatio>();
+  for (const a of packAssets) {
+    const m = a.key.match(/_(\d+x\d+)$/);
+    if (m) set.add(m[1].replace("x", ":") as AspectRatio);
+  }
+  set.add("1:1");
+  return set;
+}
+
+export async function runExtendPipeline(
+  input: ExtendInput,
+  onProgress: ProgressFn
+): Promise<{ assets: AssetFile[]; workflows: string[] }> {
+  const { pack, addOperations, addPlatforms, reference, keys } = input;
+  const ops = new Set(addOperations);
+  const workflowsUsed = new Set<string>();
+  const newAssets: AssetFile[] = [];
+
+  const emit = (key: StepKey, status: StepStatus, message?: string) =>
+    onProgress({ type: "step", key, status, message });
+
+  const pushAsset = (a: AssetFile) => {
+    newAssets.push(a);
+    onProgress({
+      type: "asset",
+      key: a.key,
+      label: a.label,
+      description: a.description,
+      blob: a.blob,
+      filename: a.filename,
+    });
+  };
+
+  const trackWorkflow = (slug: string) => {
+    if (workflowsUsed.has(slug)) return;
+    workflowsUsed.add(slug);
+    onProgress({ type: "workflow", slug });
+  };
+
+  // Index existing assets so we can detect what already exists.
+  const have = new Map<string, { blob: Blob; filename: string }>();
+  for (const a of pack.assets) have.set(a.key, { blob: a.blob, filename: a.filename });
+  if (!pack.source) {
+    throw new RunflowError("Pack has no stored source image — cannot extend (older pack).");
+  }
+
+  // ---- Re-upload source + existing cutout/cleaned so we have URLs ----
+  emit("upload", "running");
+  const sourceFile = new File([pack.source.blob], pack.source.filename || "supplier.jpg");
+  const sourceUrl = await uploadAsset(sourceFile, sourceFile.name, keys.runflow);
+  let referenceUrl: string | null = null;
+  if (reference) {
+    referenceUrl = await uploadAsset(reference, reference.name || "reference.jpg", keys.runflow);
+  }
+  emit("upload", "done");
+
+  // Vision is preserved from the original pack — no re-analyze needed.
+  emit("vision", "skipped");
+  const analysis = pack.analysis;
+  onProgress({ type: "analysis", analysis });
+
+  // Cleanup: only re-upload if the asset exists; never re-generate here.
+  let cleanedUrl: string = sourceUrl;
+  emit("cleanup", "skipped");
+  if (have.has("cleaned")) {
+    const cleanedAsset = have.get("cleaned")!;
+    const cleanedFile = new File([cleanedAsset.blob], cleanedAsset.filename, { type: cleanedAsset.blob.type || "image/jpeg" });
+    cleanedUrl = await uploadAsset(cleanedFile, cleanedFile.name, keys.runflow);
+  }
+
+  // Cutout: reuse if present, otherwise generate (only if a new op needs it).
+  const needsCutout = ops.has("background_replace") || ops.has("lifestyle_scenes");
+  let cutoutUrl: string | null = null;
+  if (have.has("cutout")) {
+    const cutoutAsset = have.get("cutout")!;
+    const cutoutFile = new File([cutoutAsset.blob], cutoutAsset.filename, { type: "image/png" });
+    cutoutUrl = await uploadAsset(cutoutFile, cutoutFile.name, keys.runflow);
+    emit("cutout", "skipped");
+  } else if (needsCutout) {
+    emit("cutout", "running");
+    trackWorkflow("runflow/product-isolation");
+    cutoutUrl = await isolateProduct(cleanedUrl, keys.runflow);
+    const cutoutBlob = await downloadBlob(cutoutUrl);
+    pushAsset({
+      key: "cutout",
+      label: "RGBA cutout",
+      description: "Background fully removed — transparent PNG, drop into PDPs / ads.",
+      filename: "01_cutout.png",
+      blob: cutoutBlob,
+    });
+    emit("cutout", "done");
+  } else {
+    emit("cutout", "skipped");
+  }
+
+  // ---- Scenes: only generate the ones not already in the pack ----
+  type SceneOutput = { key: string; url: string; label: string; description: string };
+  const sceneOutputs: SceneOutput[] = [];
+
+  const wantsWhite = ops.has("background_replace") && !have.has("white");
+  const wantsLifestyle = ops.has("lifestyle_scenes") && !have.has("life_a");
+
+  if (wantsWhite || wantsLifestyle) {
+    emit("scenes", "running");
+    trackWorkflow("openai/gpt-image-2/edit");
+    const tasks: Promise<SceneOutput>[] = [];
+
+    if (wantsWhite && cutoutUrl) {
+      tasks.push(
+        genWhiteStudio(cutoutUrl, keys.runflow).then((url) => ({
+          key: "white",
+          url,
+          label: "White studio",
+          description: "Clean product shot on a pure-white seamless backdrop, subtle contact shadow, three-quarter angle. The 1:1 version is Amazon main-image compliant.",
+        }))
+      );
+    }
+
+    if (wantsLifestyle && cutoutUrl) {
+      const scenes = [...(analysis.lifestyle_scenes || [])].slice(0, 3);
+      while (scenes.length < 3) scenes.push("on a neutral wood surface with soft side light");
+      const tags = ["a", "b", "c"];
+      scenes.forEach((scene, i) => {
+        tasks.push(
+          genLifestyle(cutoutUrl!, scene, referenceUrl, analysis.source_palette ?? null, keys.runflow).then((url) => ({
+            key: `life_${tags[i]}`,
+            url,
+            label: `Lifestyle ${tags[i].toUpperCase()}`,
+            description: scene,
+          }))
+        );
+      });
+    }
+
+    const results = await Promise.all(tasks);
+    for (const r of results) {
+      sceneOutputs.push(r);
+      const blob = await downloadBlob(r.url);
+      const slot = r.key === "white" ? 2 : 3 + ("abc".indexOf(r.key.split("_")[1] || "a"));
+      const filename = `${String(slot).padStart(2, "0")}_${r.key}.jpg`;
+      pushAsset({ key: r.key, label: r.label, description: r.description, filename, blob });
+    }
+    emit("scenes", "done");
+  } else {
+    emit("scenes", "skipped");
+  }
+
+  // ---- Add back EXISTING scenes that need new ratios fanned out from ----
+  // Re-upload them so we get URLs we can pass to smart-resize.
+  const allScenes: SceneOutput[] = [...sceneOutputs];
+  for (const key of ["white", "life_a", "life_b", "life_c"] as const) {
+    if (allScenes.find((s) => s.key === key)) continue; // just produced
+    if (!have.has(key)) continue;
+    const a = have.get(key)!;
+    const file = new File([a.blob], a.filename, { type: "image/jpeg" });
+    const url = await uploadAsset(file, file.name, keys.runflow);
+    const original = pack.assets.find((x) => x.key === key)!;
+    allScenes.push({ key, url, label: original.label, description: original.description || "" });
+  }
+
+  // ---- Ratios: fan-out missing (scene × ratio) pairs ----
+  const oldRatios = existingRatios(pack.assets);
+  const wantedRatios = uniqueRatios([...addPlatforms]);
+  // Targets = union of old + newly-requested platforms, minus the ones already fully present.
+  const targetRatios: AspectRatio[] = Array.from(new Set([...oldRatios, ...wantedRatios])).filter(
+    (r) => r !== "1:1"
+  ) as AspectRatio[];
+
+  if (allScenes.length > 0 && targetRatios.length > 0) {
+    emit("ratios", "running");
+    const usesSmart = allScenes.some((s) => s.key !== "white");
+    if (usesSmart) trackWorkflow("runflow/smart-resize");
+
+    const tasks: Promise<AssetFile>[] = [];
+    let slot = 20;
+    for (const scene of allScenes) {
+      for (const ratio of targetRatios) {
+        const ratioSlug = ratio.replace(":", "x");
+        const key = `${scene.key}_${ratioSlug}`;
+        if (have.has(key)) continue; // already in pack
+        const filename = `${String(slot).padStart(2, "0")}_${scene.key}_${ratioSlug}.jpg`;
+        const label = `${scene.label} · ${ratio}`;
+        const description = scene.description;
+        slot++;
+        if (scene.key === "white") {
+          tasks.push(
+            padToRatioWhite(scene.url, ratio).then((blob) => ({
+              key, label, description, filename, blob,
+            }))
+          );
+        } else {
+          tasks.push(
+            smartResize(scene.url, ratio, keys.runflow).then(async (url) => ({
+              key, label, description, filename, blob: await downloadBlob(url),
+            }))
+          );
+        }
+      }
+    }
+    if (tasks.length === 0) {
+      emit("ratios", "skipped");
+    } else {
+      const results = await Promise.all(tasks);
+      for (const r of results) pushAsset(r);
+      emit("ratios", "done");
+    }
+  } else {
+    emit("ratios", "skipped");
+  }
+
+  return { assets: newAssets, workflows: Array.from(workflowsUsed) };
+}
